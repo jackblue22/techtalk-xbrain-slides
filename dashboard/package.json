@@ -1,0 +1,9 @@
+{
+  "name": "@hanoi-lab/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "tsc -b && vite build", "test": "tsx --test src/*.test.ts", "typecheck": "tsc -b --pretty false" },
+  "dependencies": { "@vitejs/plugin-react": "^5.0.4", "vite": "^7.1.9", "typescript": "^5.9.3", "react": "^19.2.0", "react-dom": "^19.2.0", "lucide-react": "^0.546.0" },
+  "devDependencies": { "@types/node": "^24.10.0", "@types/react": "^19.2.2", "@types/react-dom": "^19.2.2", "tsx": "^4.20.6" }
+}

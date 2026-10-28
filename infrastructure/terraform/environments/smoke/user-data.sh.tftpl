@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/hanoi-smoke-bootstrap.log | logger -t hanoi-smoke -s 2>/dev/console) 2>&1
+systemctl enable --now docker amazon-ssm-agent
+install -d -m 0755 /opt/hanoi-smoke /mnt/hanoi-smoke
+normalized_volume_id=$(printf '%s' '${volume_id}' | tr -d '-')
+device="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$normalized_volume_id"
+for attempt in $(seq 1 60); do [ -b "$device" ] && break; sleep 5; done
+[ -b "$device" ] || { echo 'EBS data device missing'; exit 1; }
+blkid "$device" >/dev/null 2>&1 || mkfs.ext4 -m 0 "$device"
+grep -q "$normalized_volume_id" /etc/fstab || echo "$device /mnt/hanoi-smoke ext4 defaults,nofail 0 2" >> /etc/fstab
+mountpoint -q /mnt/hanoi-smoke || mount /mnt/hanoi-smoke
+date -u +%FT%TZ > /mnt/hanoi-smoke/bootstrap-verified-at.txt
+aws s3 cp "s3://${artifact_bucket}/${artifact_key}" /opt/hanoi-smoke/images.tar
+docker load --input /opt/hanoi-smoke/images.tar
+rm -f /opt/hanoi-smoke/images.tar
+docker rm -f hanoi-smoke >/dev/null 2>&1 || true
+docker run -d --name hanoi-smoke --restart unless-stopped -p 127.0.0.1:8080:8080 hanoi-lab-smoke:aws
+for attempt in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/health && { echo 'SMOKE_BOOTSTRAP_SUCCEEDED'; exit 0; }; sleep 2; done
+exit 1
+

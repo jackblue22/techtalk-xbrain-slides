@@ -1,0 +1,15 @@
+{
+  "name": "hanoi-localzone-live-lab",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["app/backend", "app/frontend", "dashboard", "agent"],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-musl": "4.65.1"
+  },
+  "engines": { "node": ">=22" }
+}

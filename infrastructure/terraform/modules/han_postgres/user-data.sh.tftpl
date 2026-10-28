@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/hanoi-lab-postgres-bootstrap.log | logger -t hanoi-lab-postgres -s 2>/dev/console) 2>&1
+
+systemctl enable --now docker
+install -d -m 0700 /opt/hanoi-lab /var/lib/hanoi-postgres
+
+normalized_volume_id=$(printf '%s' '${volume_id}' | tr -d '-')
+device="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$normalized_volume_id"
+for attempt in $(seq 1 60); do
+  [ -b "$device" ] && break
+  sleep 5
+done
+if [ ! -b "$device" ]; then
+  echo "Data volume device did not appear."
+  exit 1
+fi
+if ! blkid "$device" >/dev/null 2>&1; then
+  mkfs.ext4 -m 0 "$device"
+fi
+grep -q '^/dev/disk/by-id/' /etc/fstab || echo "$device /var/lib/hanoi-postgres ext4 defaults,nofail 0 2" >> /etc/fstab
+mountpoint -q /var/lib/hanoi-postgres || mount /var/lib/hanoi-postgres
+chown 999:999 /var/lib/hanoi-postgres
+
+aws s3 cp "s3://${artifact_bucket}/${artifact_key}" /opt/hanoi-lab/images.tar
+docker load --input /opt/hanoi-lab/images.tar
+rm -f /opt/hanoi-lab/images.tar
+
+password=$(openssl rand -hex 24)
+cat > /opt/hanoi-lab/postgres.env <<ENV
+POSTGRES_DB=hanoi_lab
+POSTGRES_USER=hanoi_app
+POSTGRES_PASSWORD=$password
+PGDATA=/var/lib/postgresql/data/pgdata
+ENV
+chmod 0600 /opt/hanoi-lab/postgres.env
+
+secret_json=$(PASSWORD="$password" PRIVATE_IP="$(hostname -I | awk '{print $1}')" python3 - <<'PY'
+import json, os
+print(json.dumps({
+    'engine': 'postgres', 'host': os.environ['PRIVATE_IP'], 'port': 5432,
+    'dbname': 'hanoi_lab', 'username': 'hanoi_app', 'password': os.environ['PASSWORD']
+}))
+PY
+)
+aws secretsmanager put-secret-value --secret-id '${secret_arn}' --secret-string "$secret_json" >/dev/null
+unset password secret_json
+
+docker rm -f hanoi-postgres >/dev/null 2>&1 || true
+docker run -d --name hanoi-postgres --restart unless-stopped --env-file /opt/hanoi-lab/postgres.env -p 5432:5432 -v /var/lib/hanoi-postgres:/var/lib/postgresql/data postgres:16-alpine
+
+for attempt in $(seq 1 60); do
+  if docker exec hanoi-postgres pg_isready -U hanoi_app -d hanoi_lab >/dev/null 2>&1; then
+    break
+  fi
+  sleep 5
+done
+if ! docker exec hanoi-postgres pg_isready -U hanoi_app -d hanoi_lab >/dev/null 2>&1; then
+  echo 'PostgreSQL readiness failed.'
+  docker logs hanoi-postgres || true
+  exit 1
+fi
+
+docker run --rm --network host --env-file /opt/hanoi-lab/postgres.env \
+  -e DATABASE_URL="postgres://hanoi_app:$(sed -n 's/^POSTGRES_PASSWORD=//p' /opt/hanoi-lab/postgres.env)@127.0.0.1:5432/hanoi_lab" \
+  hanoi-lab-backend:aws node app/backend/dist/migrate.js
+echo 'HANOI_POSTGRES_BOOTSTRAP_SUCCEEDED'
+

@@ -1,0 +1,4 @@
+# Obtain this from your own trusted network operator; never use 0.0.0.0/0.
+benchmark_client_cidrs = ["198.51.100.24/32"]
+enable_cloudfront      = false
+enable_hanoi_local_frontend = false

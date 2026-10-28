@@ -1,0 +1,7 @@
+aws_profile     = "thangvn"
+aws_region      = "ap-southeast-1"
+hanoi_zone      = "ap-southeast-1-han-1a"
+instance_type   = "c7i.large"
+data_volume_gib = 10
+# Set expected_account_id through TF_VAR_expected_account_id; do not commit it.
+

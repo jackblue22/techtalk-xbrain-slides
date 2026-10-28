@@ -1,0 +1,159 @@
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.13.0
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:8101:8101"
+      - "127.0.0.1:8102:8102"
+      - "127.0.0.1:8103:8103"
+    networks: [lab]
+
+  sg-db:
+    image: postgres:16-alpine
+    environment: &emulation-db-environment
+      POSTGRES_DB: hanoi_lab
+      POSTGRES_USER: hanoi_app
+      POSTGRES_PASSWORD: local-emulation-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanoi_app -d hanoi_lab"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - emulation-sg-data:/var/lib/postgresql/data
+      - emulation-evidence:/evidence
+    networks: [lab]
+
+  han-db:
+    image: postgres:16-alpine
+    environment: *emulation-db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanoi_app -d hanoi_lab"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - emulation-han-data:/var/lib/postgresql/data
+      - emulation-evidence:/evidence
+    networks: [lab]
+
+  recovery-db:
+    image: postgres:16-alpine
+    environment: *emulation-db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanoi_app -d hanoi_lab"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - emulation-recovery-data:/var/lib/postgresql/data
+      - emulation-evidence:/evidence
+    networks: [lab]
+
+  emulation-init:
+    image: node:24-alpine
+    command: ["node", "/workspace/configure-proxies.mjs"]
+    environment:
+      TOXIPROXY_URL: http://toxiproxy:8474
+      EMULATED_SG_ONE_WAY_MS: ${EMULATED_SG_ONE_WAY_MS:-18}
+      EMULATED_HAN_ONE_WAY_MS: ${EMULATED_HAN_ONE_WAY_MS:-4}
+      EMULATED_CROSS_ZONE_ONE_WAY_MS: ${EMULATED_CROSS_ZONE_ONE_WAY_MS:-12}
+      EMULATED_JITTER_MS: ${EMULATED_JITTER_MS:-1}
+    volumes:
+      - ./scripts/emulation/configure-proxies.mjs:/workspace/configure-proxies.mjs:ro
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+      sg-db:
+        condition: service_healthy
+      han-db:
+        condition: service_healthy
+    networks: [lab]
+
+  sg-api:
+    build:
+      context: .
+      dockerfile: app/backend/Dockerfile
+    environment:
+      DATABASE_URL: postgres://hanoi_app:local-emulation-only@sg-db:5432/hanoi_lab
+      PORT: 8080
+      HOST: 0.0.0.0
+      DEPLOYMENT_MODE: LOCAL_NETWORK_EMULATION
+      APP_SCENARIO: sg_baseline_emulated
+      APP_VANTAGE: emulated-singapore-app
+      DB_LOCATION: emulated-singapore-db
+      AWS_REGION: ap-southeast-1
+      EMULATED_HTTP_ONE_WAY_MS: ${EMULATED_SG_ONE_WAY_MS:-18}
+      EMULATED_DB_ONE_WAY_MS: 0
+    depends_on:
+      sg-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [lab]
+
+  han-api:
+    build:
+      context: .
+      dockerfile: app/backend/Dockerfile
+    environment:
+      DATABASE_URL: postgres://hanoi_app:local-emulation-only@han-db:5432/hanoi_lab
+      PORT: 8080
+      HOST: 0.0.0.0
+      DEPLOYMENT_MODE: LOCAL_NETWORK_EMULATION
+      APP_SCENARIO: han_baseline_emulated
+      APP_VANTAGE: emulated-hanoi-app
+      DB_LOCATION: emulated-hanoi-db
+      AWS_REGION: ap-southeast-1
+      EMULATED_HTTP_ONE_WAY_MS: ${EMULATED_HAN_ONE_WAY_MS:-4}
+      EMULATED_DB_ONE_WAY_MS: 0
+    depends_on:
+      han-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [lab]
+
+  hybrid-api:
+    build:
+      context: .
+      dockerfile: app/backend/Dockerfile
+    command: ["node", "app/backend/dist/index.js"]
+    environment:
+      DATABASE_URL: postgres://hanoi_app:local-emulation-only@toxiproxy:55432/hanoi_lab
+      PORT: 8080
+      HOST: 0.0.0.0
+      DEPLOYMENT_MODE: LOCAL_NETWORK_EMULATION
+      APP_SCENARIO: hybrid_sg_app_han_db_emulated
+      APP_VANTAGE: emulated-singapore-app
+      DB_LOCATION: emulated-hanoi-db-via-shaped-tcp
+      AWS_REGION: ap-southeast-1
+      EMULATED_HTTP_ONE_WAY_MS: ${EMULATED_SG_ONE_WAY_MS:-18}
+      EMULATED_DB_ONE_WAY_MS: ${EMULATED_CROSS_ZONE_ONE_WAY_MS:-12}
+    depends_on:
+      emulation-init:
+        condition: service_completed_successfully
+      han-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    networks: [lab]
+
+volumes:
+  emulation-sg-data:
+  emulation-han-data:
+  emulation-recovery-data:
+  emulation-evidence:

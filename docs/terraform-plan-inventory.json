@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-10-28",
+  "provisioningPerformed": false,
+  "smoke_hanoi": {
+    "create": 22,
+    "change": 0,
+    "destroy": 0,
+    "keyResources": {
+      "aws_instance": 1,
+      "aws_ebs_volume": 1,
+      "aws_vpc": 1,
+      "aws_subnet": 1,
+      "aws_vpc_endpoint": 1,
+      "aws_s3_bucket": 1
+    }
+  },
+  "cost_minimal": {
+    "create": 48,
+    "change": 0,
+    "destroy": 0,
+    "keyResources": {
+      "aws_instance": 2,
+      "aws_ebs_volume": 2,
+      "aws_eip": 2,
+      "aws_vpc": 1,
+      "aws_subnet": 2,
+      "aws_vpc_endpoint": 1,
+      "aws_s3_bucket": 2,
+      "aws_secretsmanager_secret": 2,
+      "aws_lb": 0,
+      "aws_db_instance": 0,
+      "aws_nat_gateway": 0
+    }
+  },
+  "full_managed": {
+    "create": 87,
+    "change": 0,
+    "destroy": 0,
+    "keyResources": {
+      "aws_instance": 3,
+      "aws_db_instance": 1,
+      "aws_ebs_volume": 1,
+      "aws_lb": 2,
+      "aws_subnet": 8,
+      "aws_vpc_endpoint": 5,
+      "aws_security_group": 7
+    }
+  },
+  "planFiles": {
+    "smoke_hanoi": "infrastructure/terraform/environments/smoke/phase2b2-smoke.tfplan",
+    "cost_minimal": "infrastructure/terraform/environments/cost_minimal/phase2b2-cost_minimal.tfplan",
+    "full_managed": "infrastructure/terraform/environments/full/phase2b2-full.tfplan",
+    "trackedByGit": false
+  }
+}

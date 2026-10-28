@@ -1,0 +1,13 @@
+aws_profile                    = "thangvn"
+aws_region                     = "ap-southeast-1"
+hanoi_zone                     = "ap-southeast-1-han-1a"
+singapore_azs                  = ["ap-southeast-1a", "ap-southeast-1b"]
+hanoi_app_instance_type        = "c7i.large"
+hanoi_db_instance_type         = "m7i.large"
+singapore_app_instance_type    = "t3.small"
+singapore_rds_instance_class   = "db.t4g.micro"
+sg_database_target             = "rds"
+hanoi_data_volume_gib          = 30
+rds_storage_gib                = 20
+# Set expected_account_id through TF_VAR_expected_account_id; do not commit it.
+

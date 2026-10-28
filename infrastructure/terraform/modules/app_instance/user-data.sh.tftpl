@@ -1,0 +1,65 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee -a /var/log/hanoi-lab-bootstrap.log | logger -t hanoi-lab-bootstrap -s 2>/dev/console) 2>&1
+
+systemctl enable --now docker
+install -d -m 0700 /opt/hanoi-lab
+aws s3 cp "s3://${artifact_bucket}/${artifact_key}" /opt/hanoi-lab/images.tar
+docker load --input /opt/hanoi-lab/images.tar
+rm -f /opt/hanoi-lab/images.tar
+
+secret_json=''
+for attempt in $(seq 1 60); do
+  if secret_json=$(aws secretsmanager get-secret-value --secret-id '${database_secret_arn}' --query SecretString --output text 2>/dev/null); then
+    break
+  fi
+  sleep 10
+done
+if [ -z "$secret_json" ] || [ "$secret_json" = "None" ]; then
+  echo 'Database secret was not available after 10 minutes.'
+  exit 1
+fi
+
+SECRET_JSON="$secret_json" python3 - '${database_host_override}' '${database_ssl_mode}' > /opt/hanoi-lab/backend.env <<'PY'
+import json, os, sys, urllib.parse
+secret = json.loads(os.environ['SECRET_JSON'])
+override = sys.argv[1]
+ssl_mode = sys.argv[2]
+host = override or secret.get('host')
+port = secret.get('port', 5432)
+database = secret.get('dbname', 'hanoi_lab')
+username = urllib.parse.quote(secret['username'], safe='')
+password = urllib.parse.quote(secret['password'], safe='')
+if not host:
+    raise SystemExit('Database host is absent from both secret and override.')
+print(f'DATABASE_URL=postgres://{username}:{password}@{host}:{port}/{database}?sslmode={ssl_mode}')
+PY
+chmod 0600 /opt/hanoi-lab/backend.env
+cat >> /opt/hanoi-lab/backend.env <<'ENV'
+HOST=0.0.0.0
+PORT=8080
+DEPLOYMENT_MODE=AWS_REAL
+AWS_STATUS=CONNECTED
+AWS_REGION=ap-southeast-1
+AWS_AVAILABILITY_ZONE=${availability_zone}
+APP_SCENARIO=${scenario}
+APP_VANTAGE=${app_vantage}
+DB_LOCATION=${database_location}
+INFRASTRUCTURE_PROVENANCE=Terraform-managed AWS runtime identity; verify independently with EC2 and RDS APIs.
+ENV
+
+docker network inspect hanoi-lab >/dev/null 2>&1 || docker network create hanoi-lab
+docker rm -f backend frontend >/dev/null 2>&1 || true
+docker run -d --name backend --network hanoi-lab --restart unless-stopped --env-file /opt/hanoi-lab/backend.env -p 8080:8080 hanoi-lab-backend:aws
+docker run -d --name frontend --network hanoi-lab --restart unless-stopped -p 8081:80 hanoi-lab-frontend:aws
+
+for attempt in $(seq 1 60); do
+  if curl --fail --silent http://127.0.0.1:8080/health >/dev/null; then
+    echo 'APPLICATION_BOOTSTRAP_SUCCEEDED'
+    exit 0
+  fi
+  sleep 10
+done
+echo 'Application health check failed after 10 minutes.'
+docker logs backend || true
+exit 1
