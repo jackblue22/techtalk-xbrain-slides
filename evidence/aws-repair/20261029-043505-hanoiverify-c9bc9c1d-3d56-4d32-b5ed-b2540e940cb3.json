@@ -1,0 +1,16 @@
+{
+    "SchemaVersion":  1,
+    "RecordedAtUtc":  "2026-10-29T04:35:05.8585727Z",
+    "Phase":  "HanoiVerify",
+    "Account":  "384511757667",
+    "Region":  "ap-southeast-1",
+    "InstanceId":  "i-07a5107d21ec5654e",
+    "ScriptSha256":  "efd3bc8723342a9965f8946da6fff1521e66079e96288198a31042e73b37662c",
+    "CommandId":  "c9bc9c1d-3d56-4d32-b5ed-b2540e940cb3",
+    "Status":  "Success",
+    "ResponseCode":  0,
+    "StartedAt":  "2026-10-29T04:35:06.763Z",
+    "FinishedAt":  "2026-10-29T04:35:06.763Z",
+    "SanitizedStdout":  "[verify] SUCCEEDED: mount, PostgreSQL, backend health, and topology are ready; no secret values inspected\n",
+    "SanitizedStderr":  ""
+}

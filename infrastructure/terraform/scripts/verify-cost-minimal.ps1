@@ -11,12 +11,14 @@ $targets = @(
   @{ Name='AWS_REAL_HYBRID'; Url=[string]$outputs.hybrid_api_endpoint.value; InstanceId=[string]$outputs.singapore_instance_id.value }
 )
 $instanceIds = @($targets.InstanceId | Select-Object -Unique)
-$instances = aws ec2 describe-instances --profile $Profile --region $Region --instance-ids $instanceIds --query 'Reservations[].Instances[].{Id:InstanceId,State:State.Name,AZ:Placement.AvailabilityZone,Type:InstanceType,Credits:CreditSpecification.CpuCredits,ImdsTokens:MetadataOptions.HttpTokens,PublicIp:PublicIpAddress,PrivateIp:PrivateIpAddress}' --output json | ConvertFrom-Json
+$instances = aws ec2 describe-instances --profile $Profile --region $Region --instance-ids $instanceIds --query 'Reservations[].Instances[].{Id:InstanceId,State:State.Name,AZ:Placement.AvailabilityZone,Type:InstanceType,ImdsTokens:MetadataOptions.HttpTokens,PublicIp:PublicIpAddress,PrivateIp:PrivateIpAddress}' --output json | ConvertFrom-Json
 if (@($instances).Count -ne 2 -or @($instances | Where-Object State -ne 'running').Count -ne 0) { throw 'Both cost-minimal EC2 instances must be running.' }
 $hanoi = $instances | Where-Object AZ -eq 'ap-southeast-1-han-1a'
 if (-not $hanoi -or $hanoi.Type -ne 'c7i.large') { throw 'Hanoi placement/type verification failed.' }
 $singapore = $instances | Where-Object AZ -eq 'ap-southeast-1a'
-if (-not $singapore -or $singapore.Type -ne 't3.small' -or $singapore.Credits -ne 'standard') { throw 'Singapore placement/type/CPU-credit verification failed.' }
+if (-not $singapore -or $singapore.Type -ne 't3.small') { throw 'Singapore placement/type verification failed.' }
+$creditSpecification = aws ec2 describe-instance-credit-specifications --profile $Profile --region $Region --instance-ids $singapore.Id --query 'InstanceCreditSpecifications[0].CpuCredits' --output text
+if ($creditSpecification.Trim() -ne 'standard') { throw 'Singapore CPU-credit verification failed.' }
 if (@($instances | Where-Object ImdsTokens -ne 'required').Count -ne 0) { throw 'IMDSv2 enforcement verification failed.' }
 
 $addresses = aws ec2 describe-addresses --profile $Profile --region $Region --filters "Name=instance-id,Values=$($instanceIds -join ',')" --query 'Addresses[].{InstanceId:InstanceId,PublicIp:PublicIp,NetworkBorderGroup:NetworkBorderGroup}' --output json | ConvertFrom-Json
@@ -34,7 +36,7 @@ $checks = foreach ($target in $targets) {
   $health = Invoke-RestMethod -Uri "$($target.Url)/health" -TimeoutSec 20
   $topology = Invoke-RestMethod -Uri "$($target.Url)/api/topology" -TimeoutSec 20
   $before = Invoke-RestMethod -Uri "$($target.Url)/api/orders" -TimeoutSec 20
-  $created = Invoke-RestMethod -Method Post -Uri "$($target.Url)/api/orders" -ContentType 'application/json' -Body (@{customerRef="DEMO-AWS-MIN-$([guid]::NewGuid().ToString('N').Substring(0,10))";items=@(@{sku='VERIFY';quantity=1;unitPrice=1.23})}|ConvertTo-Json -Depth 4) -TimeoutSec 20
+  $created = Invoke-RestMethod -Method Post -Uri "$($target.Url)/api/orders" -ContentType 'application/json' -Body (@{customerRef="DEMO-AWS-MIN-$([guid]::NewGuid().ToString('N').Substring(0,10).ToUpperInvariant())";items=@(@{sku='VERIFY';quantity=1;unitPrice=1.23})}|ConvertTo-Json -Depth 4) -TimeoutSec 20
   $benchmarks = foreach ($n in @(1,5,10,20)) { Invoke-RestMethod -Uri "$($target.Url)/api/benchmark/db?n=$n" -TimeoutSec 30 }
   $sample = Invoke-RestMethod -Uri "$($target.Url)/api/orders/$($created.order.id)" -TimeoutSec 20
   if ($health.status -ne 'ok' -or $topology.mode -ne 'AWS_REAL' -or $topology.aws.status -ne 'CONNECTED' -or $before.count -lt 1 -or -not $created.order.id -or $sample.order.id -ne $created.order.id) { throw "$($target.Name) verification failed." }

@@ -27,6 +27,15 @@ variable "singapore_instance_type" {
   type    = string
   default = "t3.small"
 }
+variable "ecs_ami_id" {
+  type        = string
+  default     = "ami-01b068ca55c07ff47"
+  description = "Explicitly reviewed Amazon ECS-optimized AL2023 x86_64 AMI. Release 2023.0.20261027; source SSM parameter /aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id was resolved and recorded on 2026-10-29."
+  validation {
+    condition     = can(regex("^ami-[0-9a-f]{17}$", var.ecs_ami_id))
+    error_message = "ecs_ami_id must be an explicit 17-hex-digit AMI ID; any override requires a new read-only AMI review and saved-plan approval."
+  }
+}
 variable "benchmark_client_cidrs" {
   type        = list(string)
   description = "Presenter public IPv4 CIDRs allowed to reach API ports 8080 and 8081."
@@ -58,4 +67,13 @@ variable "vpc_cidr" {
 variable "data_volume_gib" {
   type    = number
   default = 10
+}
+variable "root_volume_gib" {
+  type        = number
+  default     = 30
+  description = "Root volume size for both ECS-optimized AL2023 instances; must be at least the reviewed AMI source snapshot size."
+  validation {
+    condition     = var.root_volume_gib >= 30
+    error_message = "The reviewed ECS-optimized AL2023 AMI has a 30-GiB source snapshot; root_volume_gib cannot be smaller than 30."
+  }
 }

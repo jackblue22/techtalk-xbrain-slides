@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "set -eu",
+    "echo MOUNT_BEGIN",
+    "findmnt -n -o SOURCE,FSTYPE,OPTIONS /var/lib/hanoi-postgres",
+    "lsblk -n -o NAME,SERIAL,FSTYPE,MOUNTPOINTS",
+    "if [ -f /var/lib/hanoi-postgres/data/PG_VERSION ]; then echo PG_INITIALIZED=yes; else echo PG_INITIALIZED=no; fi",
+    "if [ -f /var/lib/hanoi-postgres/config/postgres.env ]; then echo POSTGRES_ENV=present; else echo POSTGRES_ENV=absent; fi",
+    "if [ -f /var/lib/hanoi-postgres/.hanoi-lab-schema-initialized ]; then echo SCHEMA_MARKER=present; else echo SCHEMA_MARKER=absent; fi",
+    "docker ps --format 'CONTAINER={{.Names}} STATUS={{.Status}}' || true",
+    "echo MOUNT_END"
+  ]
+}

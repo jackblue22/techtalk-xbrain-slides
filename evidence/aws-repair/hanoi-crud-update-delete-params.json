@@ -1,0 +1,16 @@
+{
+  "commands": [
+    "set -eu",
+    "updated=$(docker exec postgres psql -v ON_ERROR_STOP=1 -U hanoi_app -d hanoi_lab -Atc \"update orders set status='confirmed', updated_at=now() where id=4 returning id;\")",
+    "[ \"$updated\" = \"4\" ]",
+    "readback=$(docker exec postgres psql -v ON_ERROR_STOP=1 -U hanoi_app -d hanoi_lab -Atc \"select status from orders where id=4;\")",
+    "[ \"$readback\" = \"confirmed\" ]",
+    "deleted=$(docker exec postgres psql -v ON_ERROR_STOP=1 -U hanoi_app -d hanoi_lab -Atc \"delete from orders where id=4 returning id;\")",
+    "[ \"$deleted\" = \"4\" ]",
+    "remaining=$(docker exec postgres psql -v ON_ERROR_STOP=1 -U hanoi_app -d hanoi_lab -Atc \"select count(*) from orders where id=4;\")",
+    "[ \"$remaining\" = \"0\" ]",
+    "echo CRUD_UPDATE=confirmed",
+    "echo CRUD_DELETE=confirmed",
+    "echo CRUD_RESIDUAL=0"
+  ]
+}

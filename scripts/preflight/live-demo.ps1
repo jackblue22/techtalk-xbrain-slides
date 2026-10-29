@@ -4,7 +4,7 @@ $region = 'ap-southeast-1'
 $project = 'hanoi-lz-live-demo'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $evidencePath = Join-Path $root 'evidence\live-demo-preflight.json'
-$planPath = Join-Path $root 'infrastructure\terraform\environments\cost_minimal\phase2b2-cost_minimal.tfplan'
+$planPath = Join-Path $root 'infrastructure\terraform\environments\cost_minimal\phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan'
 $checks = New-Object System.Collections.Generic.List[object]
 
 function Add-Check([string]$Name, [string]$State, [string]$Detail) {

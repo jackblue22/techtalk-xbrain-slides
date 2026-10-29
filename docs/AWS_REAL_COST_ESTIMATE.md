@@ -1,6 +1,6 @@
 # AWS real lab cost estimate
 
-Price check date: 2026-10-28. Currency: USD, excluding tax. The account's Paid Plan does not make these resources free.
+Price check date: 2026-10-29. Currency: USD, excluding tax. The account's Paid Plan does not make these resources free.
 
 Prices below were queried from the official AWS Price List API for the exact locations and SKUs in the saved plans. Public IPv4, Secrets Manager, PrivateLink behavior, and Local Zone pricing caveats are cross-checked against the [VPC pricing page](https://aws.amazon.com/vpc/pricing/), [Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/), [PrivateLink pricing](https://aws.amazon.com/privatelink/pricing/), and [Local Zones pricing](https://aws.amazon.com/about-aws/global-infrastructure/localzones/pricing/).
 
@@ -31,22 +31,26 @@ This profile uses the same Node.js/Fastify API in both locations and co-locates 
 | --- | ---: | ---: | ---: |
 | Hanoi `c7i.large`, 2 vCPU / 4 GiB | 1 | $0.1029/hour | $0.102900 |
 | Singapore `t3.small`, 2 vCPU / 2 GiB | 1 | $0.0264/hour | $0.026400 |
-| Hanoi gp3, 12 GiB root + 10 GiB data | 22 GiB | $0.1344/GiB-month | $0.004050 |
-| Singapore gp3, 12 GiB root + 10 GiB data | 22 GiB | $0.096/GiB-month | $0.002893 |
+| Hanoi gp3, 30 GiB root + 10 GiB data | 40 GiB | $0.1344/GiB-month | $0.007364 |
+| Singapore gp3, 30 GiB root + 10 GiB data | 40 GiB | $0.096/GiB-month | $0.005260 |
 | Public IPv4 / Elastic IP while allocated | 2 | $0.005/hour | $0.010000 |
 | Secrets Manager | 2 secrets | $0.40/secret-month | $0.001096 |
 | S3 artifact (~0.22 GB) + static frontend | 2 buckets | $0.025/GB-month plus requests | ~$0.000009 |
 | S3 gateway endpoint, Internet Gateway | 1 each | no hourly charge | $0 |
 | ALB, RDS, NAT, interface endpoints, CloudFront | 0 | — | $0 |
-| **Estimated fixed total** | | | **$0.14735/hour** |
+| **Estimated fixed total** | | | **$0.15303/hour** |
 
 | Runtime | Estimate |
 | ---: | ---: |
-| 4 hours | **$0.59** |
-| 8 hours | **$1.18** |
-| 24 hours | **$3.54** |
+| 4 hours | **$0.61** |
+| 8 hours | **$1.22** |
+| 24 hours | **$3.67** |
 
-This is about 70% below the fixed hourly estimate for `full_managed`. Cross-location transfer, internet egress, S3 requests, Secrets Manager API calls, and optional snapshots remain usage-dependent. Direct S3 website and API delivery are HTTP; CloudFront is disabled by default and has no fixed distribution-hour fee, but data transfer and requests are billable when enabled.
+This is about 69% below the fixed hourly estimate for `full_managed`. The two 30-GiB roots match the pinned ECS-optimized AMI's 30-GiB source snapshots; the previous 12-GiB roots could not launch. The additional 36 GiB costs about $4.1472/month, or $0.00568/hour when prorated over 730 hours. Cross-location transfer, internet egress, S3 requests, Secrets Manager API calls, and optional snapshots remain usage-dependent. Direct S3 website and API delivery are HTTP; CloudFront is disabled by default and has no fixed distribution-hour fee, but data transfer and requests are billable when enabled.
+
+### Active Phase 2B-5 deployment status
+
+As of 2026-10-29, both EC2 instances and both EIPs remain active, all four encrypted gp3 volumes remain attached (80 GiB total), both S3 buckets remain present, and both Secrets Manager resources remain active. The Hanoi secret currently has no version, but the secret resource itself is still billable. No project-tagged EBS snapshot exists. The current fixed estimate therefore remains **$0.15303/hour**, approximately **$1.22 for 8 hours** or **$3.67 for 24 hours**, plus variable requests and transfer. Preparing scripts and a Terraform plan does not change that cost.
 
 The Singapore `t3.small` is explicitly configured in **Standard** credit mode. This prevents T3 Unlimited surplus-credit charges, but Standard mode provides no launch credits and can throttle CPU to its earned-credit baseline after the balance is depleted. Capture `CPUCreditBalance` before and after each real benchmark and do not interpret a throttled `t3.small` versus `c7i.large` result as a geography-only comparison.
 
@@ -94,7 +98,7 @@ The Singapore `t3.small` is explicitly configured in **Standard** credit mode. T
 | Profile | 4 hours | 8 hours | 24 hours | Primary proof |
 | --- | ---: | ---: | ---: | --- |
 | `smoke_hanoi` | $0.45 | $0.90 | $2.69 | Hanoi placement, encrypted EBS, bootstrap |
-| `cost_minimal` (default) | $0.59 | $1.18 | $3.54 | Two real locations, three API/DB paths, migration/backup-capable PostgreSQL |
+| `cost_minimal` (default) | $0.61 | $1.22 | $3.67 | Two real locations, three API/DB paths, migration/backup-capable PostgreSQL |
 | `full_managed` | $1.96 | $3.93 | $11.78 | ALB/RDS/private managed architecture |
 
 The read-only Free Tier API returned account plan `PAID`, status `ACTIVE`, and account-plan remaining credits `$0.00`. This does not rule out a separate promotional credit ledger: the installed AWS CLI 2.34.41 does not expose the newer Billing `get-credits` operation, so the Billing console Credits page remains the authoritative manual check. No credit is assumed or used to reduce these estimates.

@@ -1,0 +1,24 @@
+{
+  "phase": "HanoiRuntime",
+  "mode": "EXECUTE",
+  "targetInstanceId": "i-07a5107d21ec5654e",
+  "account": "384511757667",
+  "region": "ap-southeast-1",
+  "scriptSha256": "804e61d77b14b98d692f3fee63010c08e8bf2280b0aab2ba32aa480125dcb903",
+  "wrapperSha256": "44e09cfc9cfcf5ba7cfcdf48aff5e6c34a89630dec28253e6b748898ae843240",
+  "commandId": null,
+  "submissionStatus": "REJECTED_BEFORE_COMMAND_CREATION",
+  "exitCode": 1,
+  "errorType": "ValidationException",
+  "sanitizedError": "SSM SendCommand comment length 103 exceeds the maximum of 100 characters.",
+  "remoteMutationOccurred": false,
+  "automaticRetryPerformed": false,
+  "postFailureState": {
+    "instanceState": "running",
+    "ssmPing": "Online",
+    "hanoiSecretVersionCount": 0,
+    "hanoiApiReachable": false,
+    "singaporeCase1Healthy": true
+  },
+  "recordedAtUtc": "2026-10-29T04:25:38.5992808Z"
+}

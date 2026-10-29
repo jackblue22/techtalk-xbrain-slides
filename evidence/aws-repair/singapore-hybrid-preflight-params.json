@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "set -eu",
+    "curl -fsS http://127.0.0.1:8080/health -o /dev/null",
+    "docker image inspect hanoi-lab-backend:aws >/dev/null",
+    "if docker container inspect hybrid-backend >/dev/null 2>&1; then echo HYBRID_CONTAINER=present; docker inspect -f 'HYBRID_RUNNING={{.State.Running}}' hybrid-backend; else echo HYBRID_CONTAINER=absent; fi",
+    "docker inspect -f 'CASE1_BACKEND_RUNNING={{.State.Running}}' backend",
+    "docker inspect -f 'CASE1_POSTGRES_RUNNING={{.State.Running}}' postgres",
+    "timeout 5 bash -c '</dev/tcp/10.73.64.98/5432'",
+    "echo HANOI_POSTGRES_TCP=reachable",
+    "echo SINGAPORE_HYBRID_PREFLIGHT=ready"
+  ]
+}

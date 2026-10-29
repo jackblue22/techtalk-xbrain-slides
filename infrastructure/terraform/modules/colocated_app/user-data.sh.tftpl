@@ -2,45 +2,125 @@
 set -euo pipefail
 exec > >(tee -a /var/log/hanoi-lab-bootstrap.log | logger -t hanoi-lab -s 2>/dev/console) 2>&1
 
+readonly AWS_PARENT_REGION='${aws_parent_region}'
+readonly AVAILABILITY_ZONE='${availability_zone}'
+readonly NETWORK_BORDER_GROUP='${network_border_group}'
+readonly S3_ENDPOINT="https://s3.$${AWS_PARENT_REGION}.amazonaws.com"
+readonly STATE_DIR='/var/lib/hanoi-lab-bootstrap'
+
+stage() { printf '[bootstrap] %s\n' "$1"; }
+retry() {
+  local max_attempts="$1" delay="$2" attempt=1
+  shift 2
+  until "$@"; do
+    if [ "$attempt" -ge "$max_attempts" ]; then return 1; fi
+    stage "attempt $attempt/$max_attempts failed; retrying in $${delay}s"
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    delay=$((delay < 30 ? delay * 2 : 30))
+  done
+}
+container_is_running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || true)" = 'true' ]; }
+
+stage "identity region=$AWS_PARENT_REGION az=$AVAILABILITY_ZONE border_group=$NETWORK_BORDER_GROUP"
 systemctl enable --now docker amazon-ssm-agent
-install -d -m 0700 /opt/hanoi-lab /var/lib/hanoi-postgres
+install -d -m 0700 /opt/hanoi-lab "$STATE_DIR" /var/lib/hanoi-postgres
+
 normalized_volume_id=$(printf '%s' '${volume_id}' | tr -d '-')
 device="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$normalized_volume_id"
-for attempt in $(seq 1 60); do [ -b "$device" ] && break; sleep 5; done
-[ -b "$device" ] || { echo 'EBS data device missing'; exit 1; }
-blkid "$device" >/dev/null 2>&1 || mkfs.ext4 -m 0 "$device"
-grep -q "$normalized_volume_id" /etc/fstab || echo "$device /var/lib/hanoi-postgres ext4 defaults,nofail 0 2" >> /etc/fstab
-mountpoint -q /var/lib/hanoi-postgres || mount /var/lib/hanoi-postgres
+retry 60 5 test -b "$device" || { stage 'EBS data device missing'; exit 1; }
+
+if mountpoint -q /var/lib/hanoi-postgres; then
+  mounted_source=$(findmnt -n -o SOURCE --target /var/lib/hanoi-postgres)
+  [ "$(readlink -f "$mounted_source")" = "$(readlink -f "$device")" ] || {
+    stage 'refusing to continue: PostgreSQL path is mounted from an unexpected device'
+    exit 1
+  }
+else
+  if ! blkid "$device" >/dev/null 2>&1; then
+    [ -z "$(lsblk -n -o FSTYPE "$device")" ] || { stage 'unknown filesystem detected'; exit 1; }
+    stage 'initializing previously blank Terraform PostgreSQL data volume'
+    mkfs.ext4 -m 0 "$device"
+  fi
+  grep -Fq "$device /var/lib/hanoi-postgres " /etc/fstab || printf '%s\n' "$device /var/lib/hanoi-postgres ext4 defaults,nofail 0 2" >> /etc/fstab
+  mount /var/lib/hanoi-postgres
+fi
 chown 999:999 /var/lib/hanoi-postgres
 
-aws s3 cp "s3://${artifact_bucket}/${artifact_key}" /opt/hanoi-lab/images.tar
-docker load --input /opt/hanoi-lab/images.tar
-rm -f /opt/hanoi-lab/images.tar
+stage 'downloading pinned application artifact from parent-Region S3 endpoint'
+artifact_tmp=$(mktemp /opt/hanoi-lab/images.tar.XXXXXX)
+trap 'rm -f "$artifact_tmp"' EXIT
+retry 5 2 env -u AWS_ENDPOINT_URL -u AWS_ENDPOINT_URL_S3 aws s3 cp \
+  --region "$AWS_PARENT_REGION" --endpoint-url "$S3_ENDPOINT" \
+  's3://${artifact_bucket}/${artifact_key}' "$artifact_tmp" --only-show-errors
+printf '%s  %s\n' '${artifact_sha256}' "$artifact_tmp" | sha256sum --check --status || {
+  stage 'artifact SHA-256 mismatch'; exit 1;
+}
+docker load --input "$artifact_tmp" >/dev/null
+rm -f "$artifact_tmp"
+trap - EXIT
+touch "$STATE_DIR/artifact-loaded"
 
-password=$(openssl rand -hex 24)
-cat > /opt/hanoi-lab/postgres.env <<ENV
+readonly POSTGRES_ENV='/opt/hanoi-lab/postgres.env'
+readonly PGDATA_PATH='/var/lib/hanoi-postgres/pgdata'
+if [ -s "$PGDATA_PATH/PG_VERSION" ] && [ ! -s "$POSTGRES_ENV" ]; then
+  stage 'refusing to overwrite initialized PostgreSQL: credential file is absent'
+  exit 1
+fi
+if [ ! -s "$POSTGRES_ENV" ]; then
+  password=$(openssl rand -hex 24)
+  umask 077
+  cat > "$POSTGRES_ENV" <<ENV
 POSTGRES_DB=hanoi_lab
 POSTGRES_USER=hanoi_app
 POSTGRES_PASSWORD=$password
 PGDATA=/var/lib/postgresql/data/pgdata
 ENV
-chmod 0600 /opt/hanoi-lab/postgres.env
-secret_json=$(PASSWORD="$password" PRIVATE_IP="$(hostname -I | awk '{print $1}')" python3 - <<'PY'
-import json, os
-print(json.dumps({'engine':'postgres','host':os.environ['PRIVATE_IP'],'port':5432,'dbname':'hanoi_lab','username':'hanoi_app','password':os.environ['PASSWORD']}))
+  unset password
+fi
+chmod 0600 "$POSTGRES_ENV"
+
+if ! container_is_running postgres; then
+  if docker container inspect postgres >/dev/null 2>&1; then
+    stage 'refusing to replace an existing stopped PostgreSQL container automatically'
+    exit 1
+  fi
+  stage 'starting PostgreSQL without replacing existing database files'
+  docker run -d --name postgres --restart unless-stopped --memory 768m \
+    --env-file "$POSTGRES_ENV" -p 5432:5432 \
+    -v /var/lib/hanoi-postgres:/var/lib/postgresql/data postgres:16-alpine >/dev/null
+fi
+retry 60 5 docker exec postgres pg_isready -U hanoi_app -d hanoi_lab >/dev/null || {
+  stage 'PostgreSQL readiness failed; inspect container logs separately'; exit 1;
+}
+
+secret_versions=$(aws secretsmanager describe-secret --region "$AWS_PARENT_REGION" \
+  --secret-id '${database_secret_arn}' --query 'VersionIdsToStages' --output text)
+if [ -z "$secret_versions" ] || [ "$secret_versions" = 'None' ]; then
+  local_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$POSTGRES_ENV")
+  [ -n "$local_password" ] || { stage 'local PostgreSQL credential file is invalid'; exit 1; }
+  secret_file=$(mktemp /opt/hanoi-lab/secret.XXXXXX)
+  chmod 0600 "$secret_file"
+  PASSWORD="$local_password" PRIVATE_IP="$(hostname -I | awk '{print $1}')" python3 - "$secret_file" <<'PY'
+import json, os, sys
+with open(sys.argv[1], 'w', encoding='utf-8') as f:
+    json.dump({'engine':'postgres','host':os.environ['PRIVATE_IP'],'port':5432,'dbname':'hanoi_lab','username':'hanoi_app','password':os.environ['PASSWORD']}, f)
 PY
-)
-aws secretsmanager put-secret-value --secret-id '${database_secret_arn}' --secret-string "$secret_json" >/dev/null
-unset password secret_json
+  aws secretsmanager put-secret-value --region "$AWS_PARENT_REGION" \
+    --secret-id '${database_secret_arn}' --secret-string "file://$secret_file" >/dev/null
+  rm -f "$secret_file"
+  unset local_password
+fi
 
-docker rm -f postgres backend hybrid-backend frontend >/dev/null 2>&1 || true
-docker run -d --name postgres --restart unless-stopped --memory 768m --env-file /opt/hanoi-lab/postgres.env -p 5432:5432 -v /var/lib/hanoi-postgres:/var/lib/postgresql/data postgres:16-alpine
-for attempt in $(seq 1 60); do docker exec postgres pg_isready -U hanoi_app -d hanoi_lab >/dev/null 2>&1 && break; sleep 5; done
-docker exec postgres pg_isready -U hanoi_app -d hanoi_lab >/dev/null 2>&1 || { docker logs postgres; exit 1; }
-
-local_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' /opt/hanoi-lab/postgres.env)
+local_password=$(sed -n 's/^POSTGRES_PASSWORD=//p' "$POSTGRES_ENV")
 local_url="postgres://hanoi_app:$local_password@127.0.0.1:5432/hanoi_lab"
-docker run --rm --network host -e DATABASE_URL="$local_url" hanoi-lab-backend:aws node app/backend/dist/migrate.js
+if [ ! -f "/var/lib/hanoi-postgres/.hanoi-lab-schema-v1" ]; then
+  stage 'applying the versioned synthetic-demo schema once'
+  docker run --rm --network host -e DATABASE_URL="$local_url" hanoi-lab-backend:aws \
+    node app/backend/dist/migrate.js >/dev/null
+  touch "/var/lib/hanoi-postgres/.hanoi-lab-schema-v1"
+fi
+umask 077
 cat > /opt/hanoi-lab/backend.env <<ENV
 DATABASE_URL=$local_url
 HOST=0.0.0.0
@@ -49,34 +129,50 @@ NODE_OPTIONS=--max-old-space-size=192
 CORS_ALLOWED_ORIGINS=${frontend_origin}
 DEPLOYMENT_MODE=AWS_REAL
 AWS_STATUS=CONNECTED
-AWS_REGION=ap-southeast-1
-AWS_AVAILABILITY_ZONE=${availability_zone}
+AWS_REGION=$AWS_PARENT_REGION
+AWS_AVAILABILITY_ZONE=$AVAILABILITY_ZONE
+AWS_NETWORK_BORDER_GROUP=$NETWORK_BORDER_GROUP
 APP_SCENARIO=${scenario}
 APP_VANTAGE=${app_vantage}
 DB_LOCATION=${database_location}
 INFRASTRUCTURE_PROVENANCE=Terraform cost_minimal; runtime identity must be independently verified with EC2 APIs.
 ENV
-chmod 0600 /opt/hanoi-lab/backend.env
-docker run -d --name backend --restart unless-stopped --memory 320m --network host --env-file /opt/hanoi-lab/backend.env hanoi-lab-backend:aws
+unset local_password local_url
 
-if [ '${run_local_frontend}' = 'true' ]; then
-  docker run -d --name frontend --restart unless-stopped --memory 96m --add-host backend:host-gateway -p 8082:80 hanoi-lab-frontend:aws
+if ! container_is_running backend; then
+  if docker container inspect backend >/dev/null 2>&1; then
+    stage 'refusing to replace an existing stopped backend automatically'; exit 1
+  fi
+  docker run -d --name backend --restart unless-stopped --memory 320m --network host \
+    --env-file /opt/hanoi-lab/backend.env hanoi-lab-backend:aws >/dev/null
+fi
+
+if [ '${run_local_frontend}' = 'true' ] && ! container_is_running frontend; then
+  if docker container inspect frontend >/dev/null 2>&1; then
+    stage 'refusing to replace an existing stopped frontend automatically'; exit 1
+  fi
+  docker run -d --name frontend --restart unless-stopped --memory 96m \
+    --add-host backend:host-gateway -p 8082:80 hanoi-lab-frontend:aws >/dev/null
 fi
 
 if [ '${run_hybrid_api}' = 'true' ]; then
-  peer_json=''
-  for attempt in $(seq 1 60); do
-    peer_json=$(aws secretsmanager get-secret-value --secret-id '${peer_database_secret_arn}' --query SecretString --output text 2>/dev/null || true)
-    [ -n "$peer_json" ] && [ "$peer_json" != 'None' ] && break
-    sleep 10
-  done
-  [ -n "$peer_json" ] && [ "$peer_json" != 'None' ] || { echo 'Peer database secret unavailable'; exit 1; }
-  PEER_JSON="$peer_json" python3 - > /opt/hanoi-lab/hybrid.env <<'PY'
+  stage 'waiting for peer database secret before hybrid startup'
+  peer_file=$(mktemp /opt/hanoi-lab/peer-secret.XXXXXX)
+  chmod 0600 "$peer_file"
+  fetch_peer_secret() {
+    aws secretsmanager get-secret-value --region "$AWS_PARENT_REGION" \
+      --secret-id '${peer_database_secret_arn}' --query SecretString --output text > "$peer_file" 2>/dev/null
+    [ -s "$peer_file" ] && [ "$(cat "$peer_file")" != 'None' ]
+  }
+  retry 30 5 fetch_peer_secret || { rm -f "$peer_file"; stage 'peer database secret unavailable'; exit 1; }
+  PEER_FILE="$peer_file" python3 - > /opt/hanoi-lab/hybrid.env <<'PY'
 import json, os, urllib.parse
-s=json.loads(os.environ['PEER_JSON'])
+with open(os.environ['PEER_FILE'], encoding='utf-8') as f:
+    s=json.load(f)
 u=urllib.parse.quote(s['username'],safe=''); p=urllib.parse.quote(s['password'],safe='')
 print(f"DATABASE_URL=postgres://{u}:{p}@{s['host']}:{s.get('port',5432)}/{s.get('dbname','hanoi_lab')}")
 PY
+  rm -f "$peer_file"
   cat >> /opt/hanoi-lab/hybrid.env <<ENV
 HOST=0.0.0.0
 PORT=8081
@@ -84,22 +180,33 @@ NODE_OPTIONS=--max-old-space-size=192
 CORS_ALLOWED_ORIGINS=${frontend_origin}
 DEPLOYMENT_MODE=AWS_REAL
 AWS_STATUS=CONNECTED
-AWS_REGION=ap-southeast-1
-AWS_AVAILABILITY_ZONE=${availability_zone}
+AWS_REGION=$AWS_PARENT_REGION
+AWS_AVAILABILITY_ZONE=$AVAILABILITY_ZONE
+AWS_NETWORK_BORDER_GROUP=$NETWORK_BORDER_GROUP
 APP_SCENARIO=aws-real-hybrid
 APP_VANTAGE=singapore-ec2
 DB_LOCATION=hanoi-local-zone-private-postgresql
 INFRASTRUCTURE_PROVENANCE=Terraform cost_minimal hybrid path over private VPC networking.
 ENV
   chmod 0600 /opt/hanoi-lab/hybrid.env
-  docker run -d --name hybrid-backend --restart unless-stopped --memory 320m --network host --env-file /opt/hanoi-lab/hybrid.env hanoi-lab-backend:aws
+  if ! container_is_running hybrid-backend; then
+    if docker container inspect hybrid-backend >/dev/null 2>&1; then
+      stage 'refusing to replace an existing stopped hybrid backend automatically'; exit 1
+    fi
+    docker run -d --name hybrid-backend --restart unless-stopped --memory 320m --network host \
+      --env-file /opt/hanoi-lab/hybrid.env hanoi-lab-backend:aws >/dev/null
+  fi
 fi
 
 ports='8080'
 [ '${run_hybrid_api}' = 'true' ] && ports="$ports 8081"
 for port in $ports; do
-  for attempt in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null && break; sleep 5; done
-  curl -fsS "http://127.0.0.1:$port/health" >/dev/null || { echo "API health failed on $port"; exit 1; }
+  retry 60 5 curl -fsS "http://127.0.0.1:$port/health" -o /dev/null || {
+    stage "API health failed on $port"; exit 1;
+  }
 done
-[ '${run_local_frontend}' != 'true' ] || curl -fsS http://127.0.0.1:8082/health >/dev/null || { echo 'Local frontend proxy health failed'; exit 1; }
-echo 'COLOCATED_APPLICATION_BOOTSTRAP_SUCCEEDED'
+[ '${run_local_frontend}' != 'true' ] || curl -fsS http://127.0.0.1:8082/health -o /dev/null || {
+  stage 'local frontend proxy health failed'; exit 1;
+}
+touch "$STATE_DIR/bootstrap-succeeded"
+stage 'COLOCATED_APPLICATION_BOOTSTRAP_SUCCEEDED'

@@ -6,13 +6,14 @@ resource "aws_ebs_volume" "data" {
   iops              = 3000
   throughput        = 125
   tags              = merge(var.tags, { Name = "${var.name}-postgres-data", DataClassification = "synthetic-demo" })
-  lifecycle { prevent_destroy = true }
 }
 
 locals {
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {
     artifact_bucket          = var.artifact_bucket
     artifact_key             = var.artifact_key
+    artifact_sha256          = var.artifact_sha256
+    aws_parent_region        = var.aws_parent_region
     database_secret_arn      = var.database_secret_arn
     peer_database_secret_arn = var.peer_database_secret_arn
     run_hybrid_api           = var.run_hybrid_api
@@ -22,6 +23,7 @@ locals {
     app_vantage              = var.app_vantage
     database_location        = var.database_location
     availability_zone        = var.availability_zone
+    network_border_group     = var.network_border_group
     volume_id                = aws_ebs_volume.data.id
   })
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28",
+  "generatedAt": "2026-10-29",
   "provisioningPerformed": false,
   "smoke_hanoi": {
     "create": 22,
@@ -48,7 +48,7 @@
   },
   "planFiles": {
     "smoke_hanoi": "infrastructure/terraform/environments/smoke/phase2b2-smoke.tfplan",
-    "cost_minimal": "infrastructure/terraform/environments/cost_minimal/phase2b2-cost_minimal.tfplan",
+    "cost_minimal": "infrastructure/terraform/environments/cost_minimal/phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan",
     "full_managed": "infrastructure/terraform/environments/full/phase2b2-full.tfplan",
     "trackedByGit": false
   }

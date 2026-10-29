@@ -1,0 +1,16 @@
+{
+    "SchemaVersion":  1,
+    "RecordedAtUtc":  "2026-10-29T04:47:49.4396404Z",
+    "Phase":  "SingaporeHybrid",
+    "Account":  "384511757667",
+    "Region":  "ap-southeast-1",
+    "InstanceId":  "i-0cf960f74e80cde33",
+    "ScriptSha256":  "b8e996001e0ce4a3491d3fc79857f4e162a9ca42e3f94c570491aafa6d4bda39",
+    "CommandId":  "760b2a5c-0891-4ce6-8d39-978bc2246f0a",
+    "Status":  "Success",
+    "ResponseCode":  0,
+    "StartedAt":  "2026-10-29T04:47:44.021Z",
+    "FinishedAt":  "2026-10-29T04:47:50.021Z",
+    "SanitizedStdout":  "[repair] Case 1 health verified; postgres and backend containers will not be modified\n[repair] SUCCEEDED: hybrid API is healthy and Case 1 remains healthy\n",
+    "SanitizedStderr":  "curl: (7) Failed to connect to 127.0.0.1:8081 after 0 ms: Could not connect to server\n"
+}

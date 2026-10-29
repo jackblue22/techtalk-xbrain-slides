@@ -12,7 +12,6 @@ locals {
 data "aws_caller_identity" "current" {}
 data "aws_availability_zone" "singapore" { name = var.singapore_zone }
 data "aws_availability_zone" "hanoi" { name = var.hanoi_zone }
-data "aws_ssm_parameter" "ecs_ami" { name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id" }
 data "aws_ec2_instance_type_offerings" "hanoi" {
   filter {
     name   = "location"
@@ -66,8 +65,6 @@ resource "aws_security_group" "workload" {
   name_prefix = "${local.name}-workload-"
   description = "Direct demo APIs from reviewed presenter CIDRs; PostgreSQL stays private"
   vpc_id      = module.network.vpc_id
-  ingress     = []
-  egress      = []
   tags        = merge(local.common_tags, { Name = "${local.name}-workload" })
 }
 resource "aws_vpc_security_group_ingress_rule" "api" {
@@ -167,7 +164,7 @@ data "aws_iam_policy_document" "sg_runtime" {
     resources = [module.artifacts.object_arn]
   }
   statement {
-    actions   = ["secretsmanager:PutSecretValue"]
+    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:PutSecretValue"]
     resources = [aws_secretsmanager_secret.singapore_db.arn]
   }
   statement {
@@ -181,7 +178,7 @@ data "aws_iam_policy_document" "han_runtime" {
     resources = [module.artifacts.object_arn]
   }
   statement {
-    actions   = ["secretsmanager:PutSecretValue"]
+    actions   = ["secretsmanager:DescribeSecret", "secretsmanager:PutSecretValue"]
     resources = [aws_secretsmanager_secret.hanoi_db.arn]
   }
 }
@@ -207,15 +204,17 @@ module "frontend" {
 module "hanoi" {
   source                = "../../modules/colocated_app"
   name                  = "hanoi-lab-minimal-hanoi"
-  ami_id                = data.aws_ssm_parameter.ecs_ami.value
+  ami_id                = var.ecs_ami_id
   instance_type         = var.hanoi_instance_type
   subnet_id             = module.network.subnet_ids["hanoi"]
   availability_zone     = var.hanoi_zone
   network_border_group  = data.aws_availability_zone.hanoi.network_border_group
+  aws_parent_region     = var.aws_region
   security_group_id     = aws_security_group.workload.id
   instance_profile_name = aws_iam_instance_profile.hanoi.name
   artifact_bucket       = module.artifacts.bucket_name
   artifact_key          = module.artifacts.object_key
+  artifact_sha256       = filesha256(var.artifact_path)
   database_secret_arn   = aws_secretsmanager_secret.hanoi_db.arn
   run_local_frontend    = var.enable_hanoi_local_frontend
   frontend_origin       = module.frontend.frontend_origin
@@ -223,6 +222,7 @@ module "hanoi" {
   app_vantage           = "hanoi-local-zone-ec2"
   database_location     = "same-hanoi-ec2-encrypted-ebs"
   data_volume_gib       = var.data_volume_gib
+  root_volume_gib       = var.root_volume_gib
   tags                  = local.common_tags
   depends_on            = [aws_iam_role_policy.han_runtime, terraform_data.safety_gate]
 }
@@ -230,16 +230,18 @@ module "hanoi" {
 module "singapore" {
   source                   = "../../modules/colocated_app"
   name                     = "hanoi-lab-minimal-singapore"
-  ami_id                   = data.aws_ssm_parameter.ecs_ami.value
+  ami_id                   = var.ecs_ami_id
   instance_type            = var.singapore_instance_type
   subnet_id                = module.network.subnet_ids["singapore"]
   availability_zone        = var.singapore_zone
   network_border_group     = data.aws_availability_zone.singapore.network_border_group
+  aws_parent_region        = var.aws_region
   cpu_credits              = "standard"
   security_group_id        = aws_security_group.workload.id
   instance_profile_name    = aws_iam_instance_profile.singapore.name
   artifact_bucket          = module.artifacts.bucket_name
   artifact_key             = module.artifacts.object_key
+  artifact_sha256          = filesha256(var.artifact_path)
   database_secret_arn      = aws_secretsmanager_secret.singapore_db.arn
   peer_database_secret_arn = aws_secretsmanager_secret.hanoi_db.arn
   run_hybrid_api           = true
@@ -248,6 +250,7 @@ module "singapore" {
   app_vantage              = "singapore-regional-ec2"
   database_location        = "same-singapore-ec2-encrypted-ebs"
   data_volume_gib          = var.data_volume_gib
+  root_volume_gib          = var.root_volume_gib
   tags                     = local.common_tags
   depends_on               = [module.hanoi, aws_iam_role_policy.sg_runtime, terraform_data.safety_gate]
 }

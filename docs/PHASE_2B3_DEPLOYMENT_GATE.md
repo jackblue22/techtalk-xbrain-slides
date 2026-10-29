@@ -1,6 +1,6 @@
 # Phase 2B-3 controlled deployment gate
 
-Status date: 2026-10-28. **STOPPED BEFORE APPLY. No AWS resource was created, changed, or destroyed.**
+Status date: 2026-10-29. **STOPPED BEFORE APPLY. No AWS resource was created, changed, or destroyed.**
 
 This gate applies only to `infrastructure/terraform/environments/cost_minimal` with AWS profile `thangvn` in `ap-southeast-1`. Approval of any previous reconstruction, account upgrade, smoke profile, or full-managed profile does not authorize this deployment.
 
@@ -10,14 +10,14 @@ This gate applies only to `infrastructure/terraform/environments/cost_minimal` w
 - `ap-southeast-1-han-1a` is `available` and `opted-in`; its network border group is `ap-southeast-1-han-1`.
 - `c7i.large` is currently offered in the Hanoi Local Zone. Offerings do not reserve capacity, so launch can still fail.
 - Standard On-Demand EC2 quota is 16 vCPUs; this plan requires 4. Elastic IP quota is 5; the current tagged lab inventory is zero and this plan requires 2.
-- The reviewed presenter ingress is `171.225.185.86/32`. Recreate the plan instead of applying it if the operator's public IPv4 changes.
+- The reviewed presenter ingress is `14.224.239.90/32`. Recreate the plan instead of applying it if the operator's public IPv4 changes.
 - A representative IAM policy simulation returned allowed for the required EC2, EBS, EIP, VPC, IAM, S3, SSM, and Secrets Manager operations. This does not override an organization SCP, capacity error, or a runtime AWS denial.
 
 ## Exact saved plan
 
-- Plan: `infrastructure/terraform/environments/cost_minimal/phase2b2-cost_minimal.tfplan`
-- SHA-256: `0b8f96c6ad2cb401c6a7a4f8543970a92fdb5c4d359314acc293fd5bd2e8574a`
-- Size: 25,497 bytes
+- Plan: `infrastructure/terraform/environments/cost_minimal/phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan`
+- SHA-256: `965c852dda01c6b5565d65e004256a45784ea4833ade9937e76535b366fc05a6`
+- Size: 25,654 bytes
 - Terraform result: **48 add, 0 change, 0 destroy**
 - Application artifact: `infrastructure/terraform/artifacts/minimal-images.tar`
 - Artifact SHA-256: `5ed9306375ab7e0cb66d7166db4222ef37d3b0e4c7d0aaf2c238fd6b0402c31f`
@@ -42,11 +42,12 @@ Do not apply if either hash, Terraform source, provider lock file, account, pres
 
 | Location | Compute | Root | PostgreSQL data | Public address |
 | --- | --- | --- | --- | --- |
-| Singapore `ap-southeast-1a` | `t3.small`, CPU credits `standard` | encrypted gp3, 12 GiB | encrypted gp3, 10 GiB, `prevent_destroy` | EIP in `ap-southeast-1` |
-| Hanoi `ap-southeast-1-han-1a` | `c7i.large` | encrypted gp3, 12 GiB | encrypted gp3, 10 GiB, `prevent_destroy` | EIP in `ap-southeast-1-han-1` |
+| Singapore `ap-southeast-1a` | `t3.small`, CPU credits `standard` | encrypted gp3, 30 GiB | encrypted gp3, 10 GiB, `prevent_destroy` | EIP in `ap-southeast-1` |
+| Hanoi `ap-southeast-1-han-1a` | `c7i.large` | encrypted gp3, 30 GiB | encrypted gp3, 10 GiB, `prevent_destroy` | EIP in `ap-southeast-1-han-1` |
 
+- Both instances pin Amazon-owned ECS-optimized AL2023 AMI `ami-01b068ca55c07ff47`, release `2023.0.20261027`. The source SSM parameter was recorded, not dynamically resolved by the plan.
 - EC2 IMDSv2 is required with hop limit 1.
-- API ports 8080–8081 are reachable only from `171.225.185.86/32`; no world-open ingress is planned.
+- API ports 8080–8081 are reachable only from `14.224.239.90/32`; no world-open ingress is planned.
 - PostgreSQL 5432 is allowed only between members of the shared workload security group over private VPC addresses. It is not publicly exposed.
 - The artifact bucket is private, encrypted, versioned, and readable by the two scoped instance roles. The S3 gateway endpoint has no hourly endpoint charge.
 - The Singapore frontend bucket is deliberately public-readable because S3 website endpoints require public content. Its website endpoint is HTTP only and globally reachable.
@@ -55,7 +56,7 @@ Do not apply if either hash, Terraform source, provider lock file, account, pres
 
 ## Cost gate
 
-Estimated fixed cost is **$0.14735/hour**, approximately **$1.18 for 8 hours**, excluding tax. The major rates are Hanoi `c7i.large` $0.1029/hour, Singapore `t3.small` $0.0264/hour, two public IPv4 addresses $0.01/hour total, 44 GiB gp3 about $0.00694/hour, two secrets about $0.00110/hour, and negligible S3 storage.
+Estimated fixed cost is **$0.15303/hour**, approximately **$1.22 for 8 hours** or **$3.67 for 24 hours**, excluding tax. The major rates are Hanoi `c7i.large` $0.1029/hour, Singapore `t3.small` $0.0264/hour, two public IPv4 addresses $0.01/hour total, 80 GiB gp3 about $0.01262/hour, two secrets about $0.00110/hour, and negligible S3 storage. Correcting both roots from 12 to 30 GiB adds 36 GiB and about $0.00568/hour when monthly storage is prorated over 730 hours.
 
 Usage-dependent charges excluded from the fixed total include Singapore↔Hanoi Local Zone transfer, internet egress, S3 and Secrets Manager requests, and separately approved snapshots. T3 is pinned to Standard credit mode, so Unlimited surplus-credit charges are excluded; CPU throttling is possible and must be recorded in benchmark evidence.
 

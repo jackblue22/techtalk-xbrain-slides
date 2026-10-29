@@ -4,10 +4,12 @@ variable "instance_type" { type = string }
 variable "subnet_id" { type = string }
 variable "availability_zone" { type = string }
 variable "network_border_group" { type = string }
+variable "aws_parent_region" { type = string }
 variable "security_group_id" { type = string }
 variable "instance_profile_name" { type = string }
 variable "artifact_bucket" { type = string }
 variable "artifact_key" { type = string }
+variable "artifact_sha256" { type = string }
 variable "database_secret_arn" { type = string }
 variable "peer_database_secret_arn" {
   type    = string

@@ -1,0 +1,35 @@
+{
+  "wrapperSha256": "f28b660f4198e68d7a7f364fbc6c5c3dead24941c412a4c8d47d25922a0613a3",
+  "hanoiScriptSha256": "804e61d77b14b98d692f3fee63010c08e8bf2280b0aab2ba32aa480125dcb903",
+  "runtime": {
+    "commandId": "12181bc4-b46a-469f-837a-3e5a508cf6fb",
+    "status": "Success",
+    "responseCode": 0
+  },
+  "verify": {
+    "commandId": "c9bc9c1d-3d56-4d32-b5ed-b2540e940cb3",
+    "status": "Success",
+    "responseCode": 0
+  },
+  "application": {
+    "healthHttpStatus": 200,
+    "database": "connected",
+    "mode": "AWS_REAL",
+    "scenario": "aws-real-hanoi-colocated",
+    "availabilityZone": "ap-southeast-1-han-1a",
+    "databaseLocation": "same-hanoi-ec2-encrypted-ebs",
+    "secretStage": "AWSCURRENT"
+  },
+  "crud": {
+    "createHttpStatus": 201,
+    "readHttpStatus": 200,
+    "orderId": "4",
+    "updateObservedStatus": "confirmed",
+    "deleteReached": false,
+    "residualOrderPresent": true,
+    "failedCommandId": "0c8dd3ee-74ac-46cf-89b2-2aa74b6722b6",
+    "automaticRetryPerformed": false
+  },
+  "case2Acceptance": "PENDING_FULL_CRUD_VERIFICATION",
+  "recordedAtUtc": "2026-10-29T04:36:14.983Z"
+}

@@ -1,6 +1,6 @@
 # Phase 2B-2 cost-minimal review
 
-Status date: 2026-10-28. **No Terraform apply was run and no AWS resource was created, changed, or destroyed.**
+Status date: 2026-10-29. **No Terraform apply was run and no AWS resource was created, changed, or destroyed.**
 
 ## Decision
 
@@ -30,12 +30,18 @@ Direct S3 website hosting is intentionally public HTTP. AWS states that S3 websi
 
 ## Plan evidence
 
+The cost-minimal environment now pins Amazon-owned ECS-optimized AL2023 AMI `ami-01b068ca55c07ff47` through the configurable `ecs_ami_id` variable. It was originally resolved from `/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id`, then frozen for review. Its ECS AMI release is `2023.0.20261027`, based on `al2023-ami-minimal-2023.12.20261026.1-kernel-6.1-x86_64`, with ECS Agent 1.108.1, Docker 25.0.18, containerd 2.3.7, and runc 1.4.3. Moving `recommended` resolution no longer changes deployment plans implicitly; any AMI override requires a new review.
+
+AWS `describe-images` and `describe-snapshots` showed that both the former and pinned ECS AMIs use a 30-GiB root snapshot. Because EBS cannot create a snapshot-backed volume smaller than its source snapshot, the former 12-GiB root override would fail at EC2 launch even though `terraform validate` passed. Both instances now explicitly request encrypted 30-GiB gp3 roots. Their separate encrypted 10-GiB PostgreSQL data volumes and `prevent_destroy` safeguards are unchanged.
+
+The final saved plan is `environments/cost_minimal/phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan`, SHA-256 `965c852dda01c6b5565d65e004256a45784ea4833ade9937e76535b366fc05a6`, with **48 create, 0 change, 0 destroy**. Its presenter ingress is `14.224.239.90/32`. Compared resource-for-resource with the immediately preceding candidate for that CIDR, it has the same 48 addresses and pinned AMI; only the two EC2 root sizes change from 12 to 30 GiB. The plan's artifact `source_hash` is MD5 `db58fc91b938fa4dcd1ec09be458945b`, matching the current archive whose SHA-256 is `5ed9306375ab7e0cb66d7166db4222ef37d3b0e4c7d0aaf2c238fd6b0402c31f`.
+
 All profiles were initialized, formatted, validated, and planned with AWS provider v6.70.0:
 
 | Profile | Add | Change | Destroy | Saved plan |
 | --- | ---: | ---: | ---: | --- |
 | `smoke_hanoi` | 22 | 0 | 0 | `environments/smoke/phase2b2-smoke.tfplan` |
-| `cost_minimal` | 48 | 0 | 0 | `environments/cost_minimal/phase2b2-cost_minimal.tfplan` |
+| `cost_minimal` | 48 | 0 | 0 | `environments/cost_minimal/phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan` |
 | `full_managed` | 87 | 0 | 0 | `environments/full/phase2b2-full.tfplan` |
 
 The `cost_minimal` plan contains 2 EC2, 2 EIP, 2 protected data EBS volumes, 2 public subnets, 2 S3 buckets, 2 Secrets Manager secrets, one free S3 gateway endpoint, and IAM/network support. It contains zero ALB, RDS, NAT Gateway, interface endpoint, ECS, EKS, or ElastiCache resources. One S3 bucket is private/versioned for artifacts; one is public only for the static website. The saved plan restricts API ingress to the presenter IP observed during planning and must be regenerated if that IP changes.

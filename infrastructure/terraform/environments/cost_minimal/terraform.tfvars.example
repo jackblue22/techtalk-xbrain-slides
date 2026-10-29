@@ -1,4 +1,6 @@
 # Obtain this from your own trusted network operator; never use 0.0.0.0/0.
 benchmark_client_cidrs = ["198.51.100.24/32"]
-enable_cloudfront      = false
+ecs_ami_id                 = "ami-01b068ca55c07ff47"
+root_volume_gib            = 30
+enable_cloudfront          = false
 enable_hanoi_local_frontend = false

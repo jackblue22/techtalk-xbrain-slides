@@ -9,6 +9,8 @@ output/
 evidence/*.json
 evidence/*.csv
 evidence/agent-runs/
+evidence/.aws-lab-operation.*/
+evidence/runtime-config-restore.js
 !evidence/README.md
 .terraform/
 *.tfstate
@@ -19,3 +21,4 @@ evidence/agent-runs/
 infrastructure/terraform/artifacts/*.tar
 infrastructure/terraform/artifacts/*.tar.gz
 infrastructure/terraform/artifacts/*.zip
+infrastructure/terraform/environments/*/evidence/
