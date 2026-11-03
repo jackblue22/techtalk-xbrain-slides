@@ -6,6 +6,10 @@ resource "aws_ebs_volume" "data" {
   iops              = 3000
   throughput        = 125
   tags              = merge(var.tags, { Name = "${var.name}-postgres-data", DataClassification = "synthetic-demo" })
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 locals {

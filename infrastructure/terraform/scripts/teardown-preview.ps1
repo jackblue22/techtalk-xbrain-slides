@@ -1,9 +1,9 @@
 param(
   [Parameter(Mandatory)][ValidateSet('CostMinimal')][string]$Environment,
-  [string]$PresenterCidr = '14.224.239.90/32',
-  [string]$Profile = 'thangvn',
+  [Parameter(Mandatory)][string]$PresenterCidr,
+  [Parameter(Mandatory)][string]$Profile,
   [string]$Region = 'ap-southeast-1',
-  [string]$ExpectedAccountSuffix = '7667',
+  [Parameter(Mandatory)][string]$ExpectedAccountId,
   [string[]]$KnownSecretArn = @(),
   [string]$OutputPath
 )
@@ -52,9 +52,11 @@ function Get-SnapshotMonthlyRate {
 $identity = Invoke-AwsJson @('sts', 'get-caller-identity', '--profile', $Profile, '--output', 'json')
 $accountId = [string]$identity.Account
 if ([string]::IsNullOrWhiteSpace($accountId)) { throw "AWS profile $Profile did not return an account ID." }
-if (-not $accountId.EndsWith($ExpectedAccountSuffix)) { throw "AWS account does not end in the reviewed suffix $ExpectedAccountSuffix." }
+if ($accountId -ne $ExpectedAccountId) { throw 'AWS account does not match the explicitly reviewed account ID.' }
 
 $env:TF_VAR_expected_account_id = $accountId
+$env:TF_VAR_aws_profile = $Profile
+$env:TF_VAR_aws_region = $Region
 $env:TF_VAR_benchmark_client_cidrs = ConvertTo-Json -Compress @($PresenterCidr)
 
 $stateAddresses = @()

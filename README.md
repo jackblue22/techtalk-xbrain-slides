@@ -1,14 +1,29 @@
 # AWS Hanoi Local Zone Live Lab
 
+> Current AWS state: **NOT_DEPLOYED**. The previous `cost_minimal` environment was destroyed successfully. Retained AWS_REAL benchmark evidence is historical and is never presented as a current environment.
+
+The dashboard is a route-based educational portal: `/`, `/learn`, `/scenarios`, `/setup`, `/infra`, `/benchmarks`, `/operations`, and the interactive end-to-end workspace at `/demo`.
+
+Start with [QUICKSTART.md](QUICKSTART.md):
+
+For continuation in a fresh Codex session, read [CODEX_HANDOFF.md](CODEX_HANDOFF.md) before changing lifecycle or Terraform behavior.
+
+```powershell
+npm ci
+.\lab.ps1 doctor
+.\lab.ps1 local -Build
+```
+
 A real, auditable three-tier demo for **AWS Hanoi Local Zone for Vietnam Workloads: Architecture, Data Residency & Trade-offs**.
 
-Phase 0 and Phase 1 provide the portable React + Node.js + PostgreSQL application and presenter dashboard. Phase 2A adds a no-cloud-charge local network emulation workflow. Phase 2B now contains three reviewed Terraform profiles: `smoke_hanoi`, default `cost_minimal`, and optional `full_managed`. No AWS infrastructure has been provisioned.
+Phase 0 and Phase 1 provide the portable React + Node.js + PostgreSQL application and interactive lab workspace. Phase 2A adds a no-cloud-charge local network emulation workflow. Phase 2B contains three reviewed Terraform profiles: `smoke_hanoi`, default `cost_minimal`, and optional `full_managed`. The previously verified AWS deployment was destroyed; the active deployment state now contains zero resources.
 
 ## AWS plan review
 
 ```powershell
-.\infrastructure\terraform\scripts\build-artifacts.ps1
-.\infrastructure\terraform\scripts\plan-review.ps1 -PresenterCidr '<YOUR_PUBLIC_IPV4>/32'
+.\lab.ps1 artifacts
+.\lab.ps1 plan -Profile <profile> -PresenterCidr '<YOUR_PUBLIC_IPV4>/32'
+.\lab.ps1 review
 ```
 
 These commands default to the two-location cost-minimal profile and generate a plan only. Read the [cost-minimal review](docs/PHASE_2B2_COST_MINIMAL_REVIEW.md), [deployment runbook](docs/AWS_REAL_DEPLOYMENT_RUNBOOK.md), [cost estimate](docs/AWS_REAL_COST_ESTIMATE.md), and [teardown runbook](docs/AWS_REAL_TEARDOWN_RUNBOOK.md) before considering an apply.
@@ -26,7 +41,7 @@ Copy-Item .env.emulation.example .env.emulation
 Open:
 
 - Order application: <http://localhost:8081>
-- Presenter dashboard: <http://localhost:3000>
+- Interactive portal: <http://localhost:3000>
 - Singapore-shaped API: <http://127.0.0.1:8101>
 - Hanoi-shaped API: <http://127.0.0.1:8102>
 - Hybrid Singapore-app/Hanoi-database-shaped API: <http://127.0.0.1:8103>
@@ -36,7 +51,7 @@ The delays in `.env.emulation` are illustrative operator inputs. Results come fr
 ## Five local scenarios
 
 ```powershell
-# Presenter-friendly preflight and full rehearsal
+# Readiness preflight and full local rehearsal
 .\scripts\emulation\presenter.ps1 -Scenario Preflight
 .\scripts\emulation\presenter.ps1 -Scenario All -Samples 100 -Warmups 5
 
@@ -50,7 +65,7 @@ The delays in `.env.emulation` are illustrative operator inputs. Results come fr
 .\scripts\emulation\backup-restore.ps1
 ```
 
-The dashboard **Scenarios** view follows the launcher's actual streamed log and exposes benchmark, migration, and recovery evidence. See [the presenter runbook](docs/PRESENTER_RUNBOOK.md), [benchmark methodology](docs/BENCHMARK_METHODOLOGY.md), [rehearsal guide](docs/LIVE_DEMO_REHEARSAL.md), and [AWS authentication recovery](docs/AWS_AUTH_RECOVERY.md).
+The dashboard **Scenarios** view follows the launcher's actual streamed log and exposes benchmark, migration, and recovery evidence. The localhost agent also exposes fixed read-only AWS lifecycle actions for preflight, saved-plan creation/review and residual inventory. It has no apply or destroy executor. See [the presenter runbook](docs/PRESENTER_RUNBOOK.md), [benchmark methodology](docs/BENCHMARK_METHODOLOGY.md), [rehearsal guide](docs/LIVE_DEMO_REHEARSAL.md), and [AWS authentication recovery](docs/AWS_AUTH_RECOVERY.md).
 
 Stop without deleting volumes:
 
@@ -61,7 +76,7 @@ docker compose -f docker-compose.yml -f docker-compose.emulation.yml down
 ## Developer verification
 
 ```powershell
-npm install
+npm ci
 npm test
 npm run typecheck
 npm run build

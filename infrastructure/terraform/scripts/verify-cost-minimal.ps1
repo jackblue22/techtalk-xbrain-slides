@@ -1,4 +1,4 @@
-param([string]$Profile = 'thangvn', [string]$Region = 'ap-southeast-1')
+param([Parameter(Mandatory)][string]$Profile, [string]$Region = 'ap-southeast-1')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $environment = Join-Path $PSScriptRoot '..\environments\cost_minimal'
@@ -45,7 +45,7 @@ $checks = foreach ($target in $targets) {
 
 $frontend = Invoke-WebRequest -UseBasicParsing -Uri ([string]$outputs.frontend_url.value) -TimeoutSec 20
 if ($frontend.StatusCode -ne 200 -or $frontend.Content -notmatch 'Mini Order Management') { throw 'Singapore S3 frontend verification failed.' }
-$document = [ordered]@{status='SUCCEEDED';mode='AWS_REAL';profile='cost_minimal';instances=$instances;elasticIps=$addresses;volumes=$volumes;checks=$checks;frontend=[ordered]@{url=$outputs.frontend_url.value;delivery=$outputs.frontend_delivery_mode.value};verifiedAt=(Get-Date).ToUniversalTime().ToString('o');provenance='Live AWS API, HTTP, and PostgreSQL verification; no emulated samples.'}
+$document = [ordered]@{status='SUCCEEDED';deploymentState='DEPLOYED';mode='AWS_REAL';profile='cost_minimal';instances=$instances;elasticIps=$addresses;volumes=$volumes;checks=$checks;frontend=[ordered]@{url=$outputs.frontend_url.value;delivery=$outputs.frontend_delivery_mode.value};verifiedAt=(Get-Date).ToUniversalTime().ToString('o');provenance='Live AWS API, HTTP, and PostgreSQL verification; includes one explicitly approved synthetic order write per endpoint and no DELETE operation.'}
 $json = $document | ConvertTo-Json -Depth 10
 $json | Set-Content -LiteralPath (Join-Path $root 'evidence\aws-cost-minimal-latest.json') -Encoding utf8
 $json

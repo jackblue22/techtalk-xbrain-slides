@@ -25,11 +25,13 @@ test('environment compatibility does not relabel AWS topologies',()=>{
 });
 
 test('real AWS lifecycle mutations remain separately approval gated',()=>{
-  const start=lifecycleControls.find(item=>item.id==='lab-start')!;
-  const stop=lifecycleControls.find(item=>item.id==='lab-stop')!;
-  assert.equal(start.actionId,undefined);
-  assert.equal(stop.actionId,undefined);
-  assert.match(start.blockedReason??'',/SEPARATE_APPROVAL/);
-  assert.match(stop.blockedReason??'',/SEPARATE_APPROVAL/);
+  const deploy=lifecycleControls.find(item=>item.id==='lab-deploy')!;
+  const destroy=lifecycleControls.find(item=>item.id==='lab-destroy')!;
+  assert.equal(deploy.actionId,undefined);
+  assert.equal(destroy.actionId,undefined);
+  assert.match(deploy.blockedReason??'',/SEPARATE_APPROVAL/);
+  assert.match(destroy.blockedReason??'',/SEPARATE_APPROVAL/);
   assert.equal(lifecycleControls.find(item=>item.id==='lab-status')?.actionId,'demo.preflight');
+  assert.equal(lifecycleControls.find(item=>item.id==='lab-plan')?.actionId,'aws.plan');
+  assert.equal(lifecycleControls.find(item=>item.id==='lab-cleanup-preview')?.actionId,'aws.cleanup-preview');
 });

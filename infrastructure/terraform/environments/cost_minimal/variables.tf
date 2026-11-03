@@ -1,6 +1,6 @@
 variable "aws_profile" {
-  type    = string
-  default = "thangvn"
+  type        = string
+  description = "Authorized AWS CLI profile selected explicitly by the operator."
 }
 variable "aws_region" {
   type    = string

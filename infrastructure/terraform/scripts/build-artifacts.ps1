@@ -24,8 +24,11 @@ if ($Target -in @('Full','All')) {
 }
 
 if ($Target -in @('CostMinimal','All')) {
-  & npm --workspace app/frontend run build
-  if ($LASTEXITCODE -ne 0) { throw 'Frontend production build failed.' }
+  Push-Location -LiteralPath $root
+  try {
+    & npm --workspace app/frontend run build
+    if ($LASTEXITCODE -ne 0) { throw 'Frontend production build failed.' }
+  } finally { Pop-Location }
   Invoke-Docker @('build','--pull','-t','hanoi-lab-backend:aws','-f',(Join-Path $root 'app\backend\Dockerfile'),$root)
   Invoke-Docker @('build','--pull','-t','hanoi-lab-frontend:aws','-f',(Join-Path $root 'app\frontend\Dockerfile'),$root)
   Invoke-Docker @('pull','postgres:16-alpine')

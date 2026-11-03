@@ -1,10 +1,10 @@
-param([string]$Profile = 'thangvn')
+param([Parameter(Mandatory)][string]$Profile)
 $ErrorActionPreference = 'Stop'
 $region = 'ap-southeast-1'
 $project = 'hanoi-lz-live-demo'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $evidencePath = Join-Path $root 'evidence\live-demo-preflight.json'
-$planPath = Join-Path $root 'infrastructure\terraform\environments\cost_minimal\phase2b4-cost-minimal-pinned-ami-30g-14-224-239-90.tfplan'
+$planPath = Join-Path $root 'infrastructure\terraform\environments\cost_minimal\clone-review.tfplan'
 $checks = New-Object System.Collections.Generic.List[object]
 
 function Add-Check([string]$Name, [string]$State, [string]$Detail) {
@@ -79,7 +79,7 @@ $apiChecks = @()
 if (Test-Path -LiteralPath $apiEvidencePath) {
   try {
     $verified = Get-Content -Raw -LiteralPath $apiEvidencePath | ConvertFrom-Json
-    foreach ($item in @($verified.checks)) {
+    foreach ($item in @($verified.checks | Where-Object { $verified.status -eq 'SUCCEEDED' -and $verified.deploymentState -eq 'DEPLOYED' })) {
       if (-not $item.endpoint) { continue }
       try {
         $health = Invoke-RestMethod -Uri ($item.endpoint.TrimEnd('/') + '/health') -TimeoutSec 15
