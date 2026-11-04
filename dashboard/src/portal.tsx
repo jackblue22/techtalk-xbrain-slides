@@ -984,8 +984,8 @@ function ExecutionView() {
       "AVAILABLE",
     ],
     ["Review", ".\\lab.ps1 review", "AVAILABLE"],
-    ["Deploy", "terraform apply <reviewed-plan>", "APPROVAL REQUIRED"],
-    ["Bootstrap", "EC2 user data + SSM readiness", "NOT_DEPLOYED"],
+    ["Deploy", "terraform apply -input=false -no-color clone-review.tfplan", "EXECUTOR DISABLED"],
+    ["Bootstrap", "bootstrap-readiness.ps1 -Profile <profile>", "NOT_DEPLOYED"],
     ["Verify", "verify-cost-minimal.ps1 -Profile <profile>", "NOT_DEPLOYED"],
     [
       "Run AWS benchmarks",
@@ -998,9 +998,14 @@ function ExecutionView() {
       "AVAILABLE",
     ],
     [
+      "Prepare Destroy Plan",
+      ".\\lab.ps1 destroy-plan -Profile <profile> -VolumeDecision <explicit-decision>",
+      "NOT_DEPLOYED",
+    ],
+    [
       "Destroy",
-      "terraform destroy after separate approval",
-      "APPROVAL REQUIRED",
+      "terraform apply -input=false -no-color destroy-review.tfplan",
+      "EXECUTOR DISABLED",
     ],
     [
       "Verify Residuals",
@@ -1780,9 +1785,10 @@ function Operations() {
         <div>
           <strong>Browser shell is intentionally unavailable</strong>
           <p>
-            Retry is limited to safe fixed actions. Apply, destroy, EC2
-            lifecycle, migration, snapshot and restore executors are not enabled
-            by this task.
+            Retry is limited to fixed actions. Apply/destroy saved-plan execution
+            code exists behind one-time approval gates, but the default agent
+            intentionally does not install that executor. EC2 lifecycle,
+            migration, snapshot and restore executors remain absent.
           </p>
         </div>
         <a className="portal-button" href="/demo#terminal">

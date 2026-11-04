@@ -65,7 +65,7 @@ The delays in `.env.emulation` are illustrative operator inputs. Results come fr
 .\scripts\emulation\backup-restore.ps1
 ```
 
-The dashboard **Scenarios** view follows the launcher's actual streamed log and exposes benchmark, migration, and recovery evidence. The localhost agent also exposes fixed read-only AWS lifecycle actions for preflight, saved-plan creation/review and residual inventory. It has no apply or destroy executor. See [the presenter runbook](docs/PRESENTER_RUNBOOK.md), [benchmark methodology](docs/BENCHMARK_METHODOLOGY.md), [rehearsal guide](docs/LIVE_DEMO_REHEARSAL.md), and [AWS authentication recovery](docs/AWS_AUTH_RECOVERY.md).
+The dashboard **Scenarios** view follows the launcher's actual streamed log and exposes benchmark, migration, and recovery evidence. The localhost agent exposes fixed AWS lifecycle actions for preflight, saved-plan creation/review, bootstrap readiness and residual inventory. An exact saved-plan apply/destroy executor is implemented and fake-tested, but the normal startup deliberately does not inject it, so real mutation remains disabled until a separately authorized rehearsal. See [the presenter runbook](docs/PRESENTER_RUNBOOK.md), [benchmark methodology](docs/BENCHMARK_METHODOLOGY.md), [rehearsal guide](docs/LIVE_DEMO_REHEARSAL.md), and [AWS authentication recovery](docs/AWS_AUTH_RECOVERY.md).
 
 Stop without deleting volumes:
 

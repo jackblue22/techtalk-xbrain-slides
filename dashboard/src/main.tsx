@@ -64,15 +64,17 @@ type LifecyclePlan = {
     operation: "APPLY" | "DESTROY";
     generatedAt: string;
     deploymentIdentity: string;
+    awsProfile: string;
     region: string;
     planPath: string;
     planSha256: string;
     changes: { create: number; update: number; delete: number; addresses: Array<{ address: string; actions: string[] }> };
     exactCommand: string;
     expectedEffects: string;
+    retentionDecision?: "RETAIN_PROTECTED_VOLUMES" | "DELETE_PROTECTED_VOLUMES";
   };
 };
-type LifecycleState = { mutationExecutionEnabled:boolean; locked:boolean; apply:LifecyclePlan; destroy:LifecyclePlan };
+type LifecycleState = { mutationExecutionEnabled:boolean; locked:boolean; state:{phase:string;reason:string;requiresReconciliation:boolean;updatedAt:string;lastExecutionEvidence?:string;verificationEvidence?:string}; apply:LifecyclePlan; destroy:LifecyclePlan };
 type Action = {
   id: string;
   label: string;
@@ -802,7 +804,7 @@ function App() {
             catalog={agent.catalog}
             csrfToken={agent.token}
             onRefresh={()=>void agent.refresh()}
-            onRun={(actionId, control, presenterCidr) =>
+            onRun={(actionId, control, extra) =>
               void runStep(
                 actionId,
                 {
@@ -815,7 +817,7 @@ function App() {
                 {
                   environment: "AWS_REAL_SINGAPORE",
                   scenario: "CASE_1",
-                  ...(presenterCidr ? { presenterCidr } : {}),
+                  ...extra,
                 },
               ).catch(() => undefined)
             }
@@ -1116,15 +1118,18 @@ function LifecyclePanelV2({
   onRun: (
     actionId: string,
     control: (typeof lifecycleControls)[number],
-    presenterCidr?: string,
+    extra?: Record<string, unknown>,
   ) => void;
 }) {
   const [presenterCidr, setPresenterCidr] = useState("");
   const [approvalPhrase,setApprovalPhrase]=useState("");
+  const [destroyApprovalPhrase,setDestroyApprovalPhrase]=useState("");
   const [retentionDecision,setRetentionDecision]=useState("RETAIN_PROTECTED_VOLUMES");
   const [approvalResult,setApprovalResult]=useState("");
+  const [approved,setApproved]=useState<{id:string;operation:"APPLY"|"DESTROY"}|null>(null);
   const apply=lifecycle?.apply;
-  const approve=async(operation:"APPLY"|"DESTROY")=>{const plan=operation==="APPLY"?lifecycle?.apply:lifecycle?.destroy;if(!plan?.manifest)return;setApprovalResult(`[${new Date().toLocaleTimeString()}] Sending local approval request bound to ${plan.planHashPrefix}...`);const response=await fetch(`${agentBase}/lifecycle/approvals`,{method:"POST",headers:{"content-type":"application/json","x-lab-csrf":csrfToken},body:JSON.stringify({operation,planSha256:plan.manifest.planSha256,phrase:approvalPhrase,...(operation==="DESTROY"?{retentionDecision}:{})})});const body=await response.json();setApprovalResult(`[${new Date().toLocaleTimeString()}] ${response.ok?`APPROVED ${body.approval.id}; expires ${body.approval.expiresAt}. Mutation executor remains ${body.mutationExecutionEnabled?"enabled":"disabled"}.`:`REJECTED: ${body.message??body.error}`}`);onRefresh();};
+  const approve=async(operation:"APPLY"|"DESTROY")=>{const plan=operation==="APPLY"?lifecycle?.apply:lifecycle?.destroy;if(!plan?.manifest)return;const phrase=operation==="APPLY"?approvalPhrase:destroyApprovalPhrase;setApprovalResult(`[${new Date().toLocaleTimeString()}] Sending local approval request bound to ${plan.planHashPrefix}...`);const response=await fetch(`${agentBase}/lifecycle/approvals`,{method:"POST",headers:{"content-type":"application/json","x-lab-csrf":csrfToken},body:JSON.stringify({operation,planSha256:plan.manifest.planSha256,phrase,...(operation==="DESTROY"?{retentionDecision}:{})})});const body=await response.json();if(response.ok)setApproved({id:body.approval.id,operation});else setApproved(null);setApprovalResult(`[${new Date().toLocaleTimeString()}] ${response.ok?`APPROVED ${body.approval.id}; expires ${body.approval.expiresAt}. Mutation executor is ${body.mutationExecutionEnabled?"enabled":"disabled by default"}.`:`REJECTED: ${body.message??body.error}`}`);onRefresh();};
+  const executeApproved=async()=>{if(!approved)return;setApprovalResult(value=>`${value}\n[${new Date().toLocaleTimeString()}] Dispatching one-time ${approved.operation} approval...`);const response=await fetch(`${agentBase}/lifecycle/execute`,{method:"POST",headers:{"content-type":"application/json","x-lab-csrf":csrfToken},body:JSON.stringify({approvalId:approved.id})});const body=await response.json();if(!response.ok){setApprovalResult(value=>`${value}\n[${new Date().toLocaleTimeString()}] REJECTED: ${body.message??body.error}`);return;}const source=new EventSource(`${agentBase}${body.eventsUrl}`);source.onmessage=event=>{const item=JSON.parse(event.data) as RunEvent;setApprovalResult(value=>`${value}\n[${new Date(item.at).toLocaleTimeString()}] ${item.type.toUpperCase()}${item.exitCode!==undefined?` exit=${item.exitCode}`:""}${item.data?`\n${item.data}`:""}`);if(item.type==="finished"){source.close();setApproved(null);onRefresh();}};source.onerror=()=>{source.close();setApprovalResult(value=>`${value}\nExecution stream closed before a terminal record; success was not inferred.`);onRefresh();};};
   return (
     <article className="panel lifecycle-panel">
       <div className="panel-title">
@@ -1132,8 +1137,9 @@ function LifecyclePanelV2({
           <p className="eyebrow">AWS LIFECYCLE · FIXED ALLOWLIST</p>
           <h2>Lab lifecycle controls</h2>
         </div>
-        <Status>APPROVAL GATED</Status>
+        <Status kind={lifecycle?.state.phase==="READY"?"ok":lifecycle?.state.phase==="FAILED"?"bad":"warn"}>{lifecycle?.state.phase??"AGENT OFFLINE"}</Status>
       </div>
+      {lifecycle?.state?<Notice kind={lifecycle.state.phase==="FAILED"?"bad":"warn"}><strong>{lifecycle.state.phase}</strong><p>{lifecycle.state.reason}</p>{lifecycle.state.requiresReconciliation?<p>Independent reconciliation is required; no automatic retry will run.</p>:null}</Notice>:null}
       <label>
         Verified presenter IPv4 /32
         <input
@@ -1147,9 +1153,9 @@ function LifecyclePanelV2({
         <div className="panel-title"><div><p className="eyebrow">IMMUTABLE SAVED PLAN</p><h3>{apply?.fresh?"Ready for explicit approval":"No fresh apply plan"}</h3></div><Status kind={apply?.fresh?"ok":"warn"}>{apply?.fresh?"FRESH":"BLOCKED"}</Status></div>
         {apply?.manifest?<><dl className="run-meta"><div><dt>Account</dt><dd>********{apply.accountSuffix}</dd></div><div><dt>Region</dt><dd>{apply.manifest.region}</dd></div><div><dt>Identity</dt><dd>{apply.manifest.deploymentIdentity}</dd></div><div><dt>Plan hash</dt><dd>{apply.manifest.planSha256}</dd></div><div><dt>Changes</dt><dd>{apply.manifest.changes.create} create · {apply.manifest.changes.update} update · {apply.manifest.changes.delete} delete</dd></div><div><dt>Exact command</dt><dd><code>{apply.manifest.exactCommand}</code></dd></div></dl><details className="behind-action"><summary>Inspect exact resource changes</summary><ul>{apply.manifest.changes.addresses.map(item=><li key={item.address}><code>{item.actions.join("+")} {item.address}</code></li>)}</ul></details><p>{apply.manifest.expectedEffects}</p></>:<p>{apply?.reasons.join(" ")??"Run Plan to generate a local manifest."}</p>}
         <label>Exact approval phrase<input value={approvalPhrase} onChange={event=>setApprovalPhrase(event.target.value)} placeholder={apply?.planHashPrefix?`APPROVE APPLY ${apply.planHashPrefix}`:"Plan required"}/></label>
-        <div className="button-row"><button disabled={!online||!apply?.fresh||approvalPhrase!==`APPROVE APPLY ${apply.planHashPrefix}`} onClick={()=>void approve("APPLY")}><ShieldCheck aria-hidden="true"/>Approve exact apply plan</button><button disabled title="No real mutation executor is installed for this task."><CirclePlay aria-hidden="true"/>Deploy disabled</button></div>
-        <p className="disabled-reason">Approval expires after 15 minutes and is bound to plan hash, configuration file set, AWS account, Region and deployment identity. Apply remains disabled until the separately authorized executor rehearsal.</p>
-        <details className="behind-action"><summary>Teardown approval requirements</summary><p>{lifecycle?.destroy.fresh?"A fresh destroy plan is available.":lifecycle?.destroy.reasons.join(" ")}</p><label>Protected PostgreSQL volumes<select value={retentionDecision} onChange={event=>setRetentionDecision(event.target.value)}><option value="RETAIN_PROTECTED_VOLUMES">Retain protected volumes</option><option value="DELETE_PROTECTED_VOLUMES">Delete only after separate safeguard review</option></select></label><p>Destroy approval requires <code>APPROVE DESTROY &lt;destroy-plan-hash-prefix&gt;</code> and this explicit retention decision. No destroy plan or executor is currently enabled.</p></details>
+        <div className="button-row"><button disabled={!online||!apply?.fresh||approvalPhrase!==`APPROVE APPLY ${apply.planHashPrefix}`} onClick={()=>void approve("APPLY")}><ShieldCheck aria-hidden="true"/>Approve exact apply plan</button><button disabled={!lifecycle?.mutationExecutionEnabled||approved?.operation!=="APPLY"||lifecycle.locked} title={lifecycle?.mutationExecutionEnabled?"Execute the exact one-time approved saved plan.":"Real mutation execution is disabled in the default agent startup."} onClick={()=>void executeApproved()}><CirclePlay aria-hidden="true"/>{lifecycle?.mutationExecutionEnabled?"Deploy approved plan":"Deploy disabled"}</button></div>
+        <p className="disabled-reason">Approval expires after 15 minutes and is bound to plan hash, complete configuration fingerprint, AWS account, profile, Region and deployment identity. The default agent intentionally does not install the mutation executor.</p>
+        <details className="behind-action"><summary>Teardown saved-plan approval</summary><p>{lifecycle?.destroy.fresh?"A fresh destroy plan is available.":lifecycle?.destroy.reasons.join(" ")}</p>{lifecycle?.destroy.manifest?<dl className="run-meta"><div><dt>Plan hash</dt><dd>{lifecycle.destroy.manifest.planSha256}</dd></div><div><dt>Deletes</dt><dd>{lifecycle.destroy.manifest.changes.delete}</dd></div><div><dt>Exact command</dt><dd><code>{lifecycle.destroy.manifest.exactCommand}</code></dd></div><div><dt>Bound volume decision</dt><dd>{lifecycle.destroy.manifest.retentionDecision}</dd></div></dl>:null}<label>Protected PostgreSQL volumes<select value={retentionDecision} onChange={event=>setRetentionDecision(event.target.value)}><option value="RETAIN_PROTECTED_VOLUMES">Retain volumes — blocks full destroy plan</option><option value="DELETE_PROTECTED_VOLUMES">Delete after exact safeguard review</option></select></label><label>Exact destroy approval phrase<input value={destroyApprovalPhrase} onChange={event=>setDestroyApprovalPhrase(event.target.value)} placeholder={lifecycle?.destroy.planHashPrefix?`APPROVE DESTROY ${lifecycle.destroy.planHashPrefix}`:"Destroy plan required"}/></label><div className="button-row"><button disabled={!online||!lifecycle?.destroy.fresh||destroyApprovalPhrase!==`APPROVE DESTROY ${lifecycle?.destroy.planHashPrefix}`||retentionDecision!==lifecycle?.destroy.manifest?.retentionDecision} onClick={()=>void approve("DESTROY")}><ShieldCheck aria-hidden="true"/>Approve exact destroy plan</button><button disabled={!lifecycle?.mutationExecutionEnabled||approved?.operation!=="DESTROY"||lifecycle.locked} onClick={()=>void executeApproved()}><CircleStop aria-hidden="true"/>{lifecycle?.mutationExecutionEnabled?"Destroy approved plan":"Destroy disabled"}</button></div><p>Destroy success does not set NOT_DEPLOYED. The independent residual audit must prove zero active project resources and zero managed state entries.</p></details>
         {approvalResult?<pre aria-live="polite">{approvalResult}</pre>:null}
       </section>
       <div className="lifecycle-grid">
@@ -1167,12 +1173,21 @@ function LifecyclePanelV2({
                 ["CASE_1", "CASE_2", "CASE_3"].includes(target.scenario) &&
                 target.environment.startsWith("AWS_REAL"),
             ) ?? [];
+          const phase=lifecycle?.state.phase??"NOT_DEPLOYED";
           const runtimeBlockedReason =
-            control.id === "lab-verify" && !lifecycle?.mutationExecutionEnabled
-              ? "NOT_DEPLOYED — verification unlocks only after a separately authorized deployment executor is enabled."
+            control.id === "lab-reconcile" && phase!=="FAILED"
+              ? `${phase} — reconciliation is reserved for interrupted or failed lifecycle state.`
+              : control.id === "lab-bootstrap" && !["INFRA_DEPLOYED","FAILED"].includes(phase)
+              ? `${phase} — bootstrap readiness starts only after apply or during explicit reconciliation.`
+              : control.id === "lab-verify" && phase!=="VERIFYING"
+                ? `${phase} — Cases 1–3 verification unlocks only after bootstrap readiness succeeds.`
               : control.id === "lab-benchmark" &&
-                  verifiedAwsTargets.length !== 3
-                ? "NOT_DEPLOYED — all three live AWS paths must first pass verification; historical evidence remains separate."
+                  (phase!=="READY"||verifiedAwsTargets.length !== 3)
+                ? `${phase} — all three live AWS paths must first pass verification; historical evidence remains separate.`
+                : control.id === "lab-destroy-plan" && phase!=="READY"
+                  ? `${phase} — destroy-plan preparation requires a verified READY deployment.`
+                  : control.id === "lab-residuals" && !["RESIDUAL_AUDIT","FAILED"].includes(phase)
+                    ? `${phase} — residual audit runs only after destroy or explicit failed-operation reconciliation.`
                 : undefined;
           const disabled =
             Boolean(control.blockedReason) ||
@@ -1211,7 +1226,11 @@ function LifecyclePanelV2({
                 onRun(
                   action.id,
                   control,
-                  control.id === "lab-plan" ? presenterCidr : undefined,
+                  control.id === "lab-plan"
+                    ? {presenterCidr}
+                    : control.id === "lab-destroy-plan"
+                      ? {volumeDecision:retentionDecision}
+                      : undefined,
                 )
               }
             >

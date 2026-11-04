@@ -42,6 +42,14 @@ export const lifecycleControls: LifecycleControl[] = [
     actionId: "demo.preflight",
   },
   {
+    id: "lab-reconcile",
+    label: "Reconcile Interrupted State",
+    detail:
+      "Read tagged AWS and Terraform inventory after an interrupted operation or agent restart. It can restore NOT_DEPLOYED or INFRA_DEPLOYED, never READY.",
+    risk: "READ_ONLY",
+    actionId: "aws.lifecycle-reconcile",
+  },
+  {
     id: "lab-plan",
     label: "Create Review Plan",
     detail:
@@ -66,12 +74,11 @@ export const lifecycleControls: LifecycleControl[] = [
   },
   {
     id: "lab-bootstrap",
-    label: "Bootstrap",
+    label: "Reconcile Bootstrap",
     detail:
-      "EC2 user-data and SSM readiness are part of deployment verification.",
-    risk: "BILLABLE",
-    blockedReason:
-      "NOT_DEPLOYED — bootstrap cannot run before an approved apply.",
+      "Dynamically verifies both EC2 instances, SSM Online, artifact hash, initialized secrets and native user-data health without sending repair commands.",
+    risk: "READ_ONLY",
+    actionId: "aws.bootstrap-readiness",
   },
   {
     id: "lab-verify",
@@ -97,6 +104,14 @@ export const lifecycleControls: LifecycleControl[] = [
     actionId: "aws.cleanup-preview",
   },
   {
+    id: "lab-destroy-plan",
+    label: "Prepare Destroy Plan",
+    detail:
+      "Bind the explicit PostgreSQL-volume decision, exact S3 version inventory and cleanup-only safeguards into one immutable saved destroy plan.",
+    risk: "READ_ONLY",
+    actionId: "aws.destroy-plan",
+  },
+  {
     id: "lab-destroy",
     label: "Destroy",
     detail:
@@ -111,7 +126,7 @@ export const lifecycleControls: LifecycleControl[] = [
     detail:
       "Repeat the read-only tagged inventory after an authorized cleanup.",
     risk: "READ_ONLY",
-    actionId: "aws.cleanup-preview",
+    actionId: "aws.residual-audit",
   },
   {
     id: "lab-export",

@@ -30,6 +30,7 @@ evidence/secure-terraform-state-*/
 *.tfplan
 *.tfvars
 !*.tfvars.example
+infrastructure/terraform/modules/*/zz_cleanup_override.tf
 infrastructure/terraform/artifacts/*.tar
 infrastructure/terraform/artifacts/*.tar.gz
 infrastructure/terraform/artifacts/*.zip

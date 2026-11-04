@@ -32,6 +32,7 @@ resource "aws_s3_object" "artifact" {
   source                 = var.artifact_path
   source_hash            = filemd5(var.artifact_path)
   server_side_encryption = "AES256"
+  metadata               = { sha256 = filesha256(var.artifact_path) }
   tags                   = var.tags
 }
 
