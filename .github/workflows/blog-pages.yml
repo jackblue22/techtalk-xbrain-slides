@@ -5,6 +5,7 @@ on:
     branches: [demo]
     paths:
       - "blog/**"
+      - "dashboard/public/aws-icons/**"
       - "evidence/aws-real-benchmark-latest.json"
       - ".github/workflows/blog-pages.yml"
   workflow_dispatch:
