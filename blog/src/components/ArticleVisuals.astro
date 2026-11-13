@@ -1,0 +1,596 @@
+---
+import { Image } from "astro:assets";
+import ec2Icon from "../../../dashboard/public/aws-icons/ec2.svg";
+import ebsIcon from "../../../dashboard/public/aws-icons/ebs.svg";
+import localZonesIcon from "../../../dashboard/public/aws-icons/local-zones.svg";
+import s3Icon from "../../../dashboard/public/aws-icons/s3.svg";
+import vpcIcon from "../../../dashboard/public/aws-icons/vpc.svg";
+
+interface Props {
+  lang?: "en" | "vi";
+}
+
+const { lang = "en" } = Astro.props;
+const vi = lang === "vi";
+
+const copy = vi
+  ? {
+      eyebrow: "Sơ đồ kiến trúc",
+      title: "Nhìn toàn bộ đường đi trước khi nhìn vào một resource.",
+      intro: "Ba hình dưới đây tách rõ request path đã đo, dependency giữa Hanoi và Singapore, cùng nơi snapshot có thể được lưu.",
+      staticPath: "Đường phân phối frontend — tách biệt với API path",
+      browser: "Vietnam browser",
+      staticAssets: "Static assets",
+      singapore: "Singapore Regional",
+      hanoi: "Hanoi Local Zone",
+      hybrid: "Hybrid",
+      sgApi: "Singapore API",
+      hnApi: "Hanoi API",
+      sgDb: "Singapore PostgreSQL",
+      hnDb: "Hanoi PostgreSQL",
+      privatePath: "Private VPC path · SQL tuần tự",
+      measuredCaption: "Ba request path trong benchmark lịch sử. S3 chỉ phục vụ frontend; nó không nằm giữa API và PostgreSQL.",
+      boundaryTitle: "Local data plane, Regional dependencies",
+      parentRegion: "Parent Region · Singapore",
+      localZone: "Local Zone · Hanoi",
+      supportServices: "S3 artifacts · control planes · managed services",
+      localCompute: "EC2 application + PostgreSQL",
+      encryptedStorage: "Encrypted EBS",
+      boundaryCaption: "Compute và EBS có thể ở Hanoi trong khi một số supporting services và control planes vẫn thuộc parent Region.",
+      snapshotTitle: "Snapshot destination là một quyết định",
+      sourceVolume: "Hanoi EBS volume",
+      defaultRoute: "Mặc định",
+      parentSnapshot: "Snapshot tại parent Region",
+      explicitRoute: "Chọn Local Snapshot",
+      localSnapshot: "Snapshot tại Hanoi Local Zone",
+      snapshotCaption: "Placement của volume không tự chứng minh residency của backup. Destination và IAM guardrails phải được kiểm tra riêng."
+    }
+  : {
+      eyebrow: "Architecture diagrams",
+      title: "See the whole path before judging one resource.",
+      intro: "These diagrams separate the measured request paths, Hanoi-to-Singapore dependencies, and the possible snapshot destinations.",
+      staticPath: "Frontend delivery path — separate from the API path",
+      browser: "Vietnam browser",
+      staticAssets: "Static assets",
+      singapore: "Singapore Regional",
+      hanoi: "Hanoi Local Zone",
+      hybrid: "Hybrid",
+      sgApi: "Singapore API",
+      hnApi: "Hanoi API",
+      sgDb: "Singapore PostgreSQL",
+      hnDb: "Hanoi PostgreSQL",
+      privatePath: "Private VPC path · sequential SQL",
+      measuredCaption: "The three paths in the retained benchmark. S3 serves the frontend; it is not between the API and PostgreSQL.",
+      boundaryTitle: "Local data plane, Regional dependencies",
+      parentRegion: "Parent Region · Singapore",
+      localZone: "Local Zone · Hanoi",
+      supportServices: "S3 artifacts · control planes · managed services",
+      localCompute: "EC2 application + PostgreSQL",
+      encryptedStorage: "Encrypted EBS",
+      boundaryCaption: "Compute and EBS can be in Hanoi while supporting services and some control planes remain in the parent Region.",
+      snapshotTitle: "Snapshot destination is a decision",
+      sourceVolume: "Hanoi EBS volume",
+      defaultRoute: "Default",
+      parentSnapshot: "Snapshot in parent Region",
+      explicitRoute: "Choose Local Snapshot",
+      localSnapshot: "Snapshot in Hanoi Local Zone",
+      snapshotCaption: "Volume placement does not prove backup residency. Destination and IAM guardrails require separate verification."
+    };
+---
+
+<section class="visual-brief shell" aria-labelledby="visual-brief-title">
+  <header class="visual-heading">
+    <p class="eyebrow">{copy.eyebrow}</p>
+    <h2 id="visual-brief-title">{copy.title}</h2>
+    <p>{copy.intro}</p>
+  </header>
+
+  <figure class="diagram measured-paths">
+    <div class="static-delivery">
+      <span class="path-label">{copy.staticPath}</span>
+      <div class="diagram-node client-node"><span aria-hidden="true">VN</span><strong>{copy.browser}</strong></div>
+      <i class="connector muted" aria-hidden="true"></i>
+      <div class="diagram-node service-node">
+        <Image src={s3Icon} alt="" width={44} height={44} />
+        <span><strong>Amazon S3</strong><small>{copy.staticAssets} · Singapore</small></span>
+      </div>
+    </div>
+
+    <div class="runtime-label">Runtime API paths</div>
+
+    <div class="scenario-row singapore-row">
+      <span class="scenario-name">01 · {copy.singapore}</span>
+      <div class="diagram-node client-node compact"><span aria-hidden="true">VN</span><strong>Client</strong></div>
+      <i class="connector" aria-hidden="true"></i>
+      <div class="diagram-node service-node compact">
+        <Image src={ec2Icon} alt="" width={38} height={38} />
+        <strong>{copy.sgApi}</strong>
+      </div>
+      <i class="connector" aria-hidden="true"></i>
+      <div class="diagram-node service-node compact">
+        <Image src={ebsIcon} alt="" width={38} height={38} />
+        <strong>{copy.sgDb}</strong>
+      </div>
+    </div>
+
+    <div class="scenario-row hanoi-row">
+      <span class="scenario-name">02 · {copy.hanoi}</span>
+      <div class="diagram-node client-node compact"><span aria-hidden="true">VN</span><strong>Client</strong></div>
+      <i class="connector" aria-hidden="true"></i>
+      <div class="diagram-node service-node compact">
+        <Image src={localZonesIcon} alt="" width={38} height={38} />
+        <strong>{copy.hnApi}</strong>
+      </div>
+      <i class="connector" aria-hidden="true"></i>
+      <div class="diagram-node service-node compact">
+        <Image src={ebsIcon} alt="" width={38} height={38} />
+        <strong>{copy.hnDb}</strong>
+      </div>
+    </div>
+
+    <div class="scenario-row hybrid-row">
+      <span class="scenario-name">03 · {copy.hybrid}</span>
+      <div class="diagram-node client-node compact"><span aria-hidden="true">VN</span><strong>Client</strong></div>
+      <i class="connector" aria-hidden="true"></i>
+      <div class="diagram-node service-node compact">
+        <Image src={ec2Icon} alt="" width={38} height={38} />
+        <strong>{copy.sgApi}</strong>
+      </div>
+      <i class="connector private" aria-hidden="true"><span>{copy.privatePath}</span></i>
+      <div class="diagram-node service-node compact">
+        <Image src={ebsIcon} alt="" width={38} height={38} />
+        <strong>{copy.hnDb}</strong>
+      </div>
+    </div>
+
+    <figcaption>{copy.measuredCaption}</figcaption>
+  </figure>
+
+  <div class="diagram-pair">
+    <figure class="diagram boundary-map">
+      <h3>{copy.boundaryTitle}</h3>
+      <div class="location parent-location">
+        <span class="location-label">{copy.parentRegion}</span>
+        <div class="diagram-node service-node">
+          <Image src={vpcIcon} alt="" width={46} height={46} />
+          <span><strong>Amazon VPC</strong><small>{copy.supportServices}</small></span>
+        </div>
+      </div>
+      <i class="boundary-link" aria-hidden="true"></i>
+      <div class="location local-location">
+        <span class="location-label">{copy.localZone}</span>
+        <div class="local-services">
+          <div class="diagram-node service-node compact">
+            <Image src={localZonesIcon} alt="" width={38} height={38} />
+            <strong>{copy.localCompute}</strong>
+          </div>
+          <div class="diagram-node service-node compact">
+            <Image src={ebsIcon} alt="" width={38} height={38} />
+            <strong>{copy.encryptedStorage}</strong>
+          </div>
+        </div>
+      </div>
+      <figcaption>{copy.boundaryCaption}</figcaption>
+    </figure>
+
+    <figure class="diagram snapshot-map">
+      <h3>{copy.snapshotTitle}</h3>
+      <div class="snapshot-source diagram-node service-node">
+        <Image src={ebsIcon} alt="" width={46} height={46} />
+        <strong>{copy.sourceVolume}</strong>
+      </div>
+      <div class="snapshot-routes">
+        <div class="snapshot-route default-snapshot">
+          <span>{copy.defaultRoute}</span>
+          <i aria-hidden="true"></i>
+          <div class="diagram-node service-node compact">
+            <Image src={s3Icon} alt="" width={38} height={38} />
+            <strong>{copy.parentSnapshot}</strong>
+          </div>
+        </div>
+        <div class="snapshot-route local-snapshot">
+          <span>{copy.explicitRoute}</span>
+          <i aria-hidden="true"></i>
+          <div class="diagram-node service-node compact">
+            <Image src={localZonesIcon} alt="" width={38} height={38} />
+            <strong>{copy.localSnapshot}</strong>
+          </div>
+        </div>
+      </div>
+      <figcaption>{copy.snapshotCaption}</figcaption>
+    </figure>
+  </div>
+
+  <p class="icon-credit">
+    AWS Architecture Icons · <a href="https://aws.amazon.com/architecture/icons/">official icon package</a>
+  </p>
+</section>
+
+<style>
+  .visual-brief {
+    padding-block: clamp(64px, 9vw, 110px) 0;
+  }
+
+  .visual-heading {
+    display: grid;
+    max-width: 1040px;
+    grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+    gap: 16px clamp(32px, 6vw, 84px);
+    align-items: end;
+  }
+
+  .visual-heading .eyebrow {
+    grid-column: 1 / -1;
+  }
+
+  .visual-heading h2 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(2.5rem, 5.3vw, 5.2rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.02;
+  }
+
+  .visual-heading > p:last-child {
+    margin: 0;
+    color: var(--ink-muted);
+    line-height: 1.65;
+  }
+
+  .diagram {
+    min-width: 0;
+    margin: 28px 0 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #080d18;
+    box-shadow: var(--shadow);
+  }
+
+  .diagram-node {
+    min-width: 0;
+    border: 1px solid var(--line-bright);
+    border-radius: 6px;
+    background: var(--surface-strong);
+    color: var(--ink);
+  }
+
+  .service-node {
+    display: flex;
+    min-height: 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+
+  .service-node img {
+    flex: 0 0 auto;
+    border-radius: 4px;
+  }
+
+  .service-node span,
+  .service-node strong {
+    min-width: 0;
+  }
+
+  .service-node strong {
+    display: block;
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
+  .service-node small {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    line-height: 1.35;
+  }
+
+  .client-node {
+    display: flex;
+    min-height: 70px;
+    align-items: center;
+    gap: 11px;
+    padding: 12px 16px;
+  }
+
+  .client-node span {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--cyan);
+    border-radius: 50%;
+    color: var(--cyan);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+  }
+
+  .client-node strong {
+    font-size: 0.78rem;
+  }
+
+  .compact {
+    min-height: 58px;
+    padding: 9px 11px;
+  }
+
+  .compact.client-node span {
+    width: 32px;
+    height: 32px;
+  }
+
+  .measured-paths {
+    padding: clamp(18px, 4vw, 38px);
+  }
+
+  .static-delivery {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.65fr) minmax(40px, 1fr) minmax(220px, 1fr);
+    gap: 14px;
+    align-items: center;
+  }
+
+  .path-label {
+    grid-column: 1 / -1;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  .runtime-label {
+    margin: 26px 0 12px;
+    border-top: 1px dashed var(--line-bright);
+    padding-top: 18px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  .scenario-row {
+    --scenario: var(--cyan);
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(130px, 0.75fr) minmax(90px, 0.55fr) minmax(34px, 0.45fr) minmax(160px, 1fr) minmax(34px, 0.45fr) minmax(175px, 1fr);
+    gap: 10px;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    padding-block: 12px;
+  }
+
+  .scenario-row:last-of-type {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .singapore-row { --scenario: var(--singapore); }
+  .hanoi-row { --scenario: var(--hanoi); }
+  .hybrid-row { --scenario: var(--hybrid); }
+
+  .scenario-name {
+    color: var(--scenario);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .scenario-row .diagram-node {
+    border-color: color-mix(in srgb, var(--scenario) 42%, var(--line));
+  }
+
+  .connector {
+    position: relative;
+    display: block;
+    height: 2px;
+    background: var(--scenario, var(--line-bright));
+  }
+
+  .connector::after {
+    position: absolute;
+    top: 50%;
+    right: -1px;
+    width: 7px;
+    height: 7px;
+    border-top: 2px solid currentColor;
+    border-right: 2px solid currentColor;
+    color: var(--scenario, var(--line-bright));
+    content: "";
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .connector.muted {
+    --scenario: var(--ink-faint);
+  }
+
+  .connector.private {
+    height: 3px;
+    background: repeating-linear-gradient(90deg, var(--scenario) 0 8px, transparent 8px 14px);
+  }
+
+  .connector.private span {
+    position: absolute;
+    right: 50%;
+    bottom: 9px;
+    width: max-content;
+    max-width: 180px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.54rem;
+    text-align: center;
+    transform: translateX(50%);
+  }
+
+  figcaption {
+    margin-top: 18px;
+    color: var(--ink-muted);
+    font-size: 0.76rem;
+    line-height: 1.6;
+  }
+
+  .diagram-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .diagram-pair .diagram {
+    padding: clamp(18px, 3vw, 30px);
+  }
+
+  .diagram h3 {
+    margin: 0 0 22px;
+    font-family: var(--font-serif);
+    font-size: clamp(1.45rem, 2.7vw, 2.25rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+
+  .location {
+    border: 1px dashed var(--line-bright);
+    border-radius: 6px;
+    padding: 14px;
+  }
+
+  .location-label,
+  .snapshot-route > span {
+    display: block;
+    margin-bottom: 9px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+  }
+
+  .local-location {
+    border-color: color-mix(in srgb, var(--hanoi) 55%, var(--line));
+  }
+
+  .boundary-link {
+    display: block;
+    width: 2px;
+    height: 28px;
+    margin-inline: auto;
+    background: repeating-linear-gradient(180deg, var(--cyan) 0 5px, transparent 5px 9px);
+  }
+
+  .local-services {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .snapshot-source {
+    width: min(100%, 310px);
+    margin-inline: auto;
+  }
+
+  .snapshot-routes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  .snapshot-route {
+    min-width: 0;
+  }
+
+  .snapshot-route > i {
+    display: block;
+    width: 2px;
+    height: 24px;
+    margin: 0 auto 9px;
+    background: var(--orange);
+  }
+
+  .local-snapshot > i {
+    background: var(--hanoi);
+  }
+
+  .icon-credit {
+    margin: 12px 0 0;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  .icon-credit a {
+    color: var(--ink-muted);
+  }
+
+  @media (max-width: 940px) {
+    .visual-heading,
+    .diagram-pair {
+      grid-template-columns: 1fr;
+    }
+
+    .scenario-row {
+      grid-template-columns: minmax(112px, 0.7fr) minmax(85px, 0.55fr) 26px minmax(140px, 1fr) 26px minmax(155px, 1fr);
+      gap: 7px;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .visual-brief {
+      overflow: hidden;
+    }
+
+    .static-delivery,
+    .scenario-row {
+      grid-template-columns: 1fr;
+      justify-items: stretch;
+    }
+
+    .static-delivery .connector,
+    .scenario-row .connector {
+      width: 2px;
+      height: 22px;
+      margin-inline: auto;
+    }
+
+    .static-delivery .connector::after,
+    .scenario-row .connector::after {
+      top: auto;
+      right: 50%;
+      bottom: -1px;
+      transform: translateX(50%) rotate(135deg);
+    }
+
+    .scenario-name {
+      padding-top: 8px;
+    }
+
+    .connector.private {
+      background: repeating-linear-gradient(180deg, var(--scenario) 0 8px, transparent 8px 14px);
+    }
+
+    .connector.private span {
+      right: auto;
+      bottom: 50%;
+      left: 16px;
+      max-width: calc(100vw - 110px);
+      text-align: left;
+      transform: translateY(50%);
+    }
+
+    .local-services,
+    .snapshot-routes {
+      grid-template-columns: 1fr;
+    }
+
+    .snapshot-route > i {
+      height: 18px;
+    }
+
+    .icon-credit {
+      text-align: left;
+    }
+  }
+</style>

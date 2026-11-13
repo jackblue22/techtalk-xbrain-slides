@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from "astro:content";
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import ArticleVisuals from "../../components/ArticleVisuals.astro";
 
 export async function getStaticPaths() {
   const articles = await getCollection("articles");
@@ -34,6 +35,8 @@ const translationHref = article.data.translationSlug
         </a>
       )}
     </header>
+
+    <ArticleVisuals lang={article.data.lang} />
 
     <div class="article-grid shell">
       <aside class="toc" aria-label={isVietnamese ? "Mục lục" : "On this page"}>
