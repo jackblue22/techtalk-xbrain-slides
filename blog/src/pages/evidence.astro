@@ -1,0 +1,87 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import BenchmarkExplorer from "../components/BenchmarkExplorer.astro";
+import { loadEvidence } from "../lib/evidence";
+
+const evidence = loadEvidence();
+---
+
+<BaseLayout
+  title="Benchmark Evidence — Hanoi Local Zone Field Notes"
+  description="Explore the retained 1,200-request AWS benchmark comparing Singapore, Hanoi, and Hybrid API-to-PostgreSQL paths."
+>
+  <PageHero
+    eyebrow="Evidence · Retained AWS_REAL run"
+    title="One experiment, shown with its limits."
+    marker={`${evidence.status} · ${evidence.measuredRequests} measured`}
+    lede="Every chart is derived at build time from the tracked historical evidence. Nothing on this page implies AWS is currently deployed."
+  />
+
+  <section class="section shell explorer-section">
+    <BenchmarkExplorer evidence={evidence} />
+  </section>
+
+  <section class="section shell method">
+    <div class="section-heading">
+      <div><p class="eyebrow">Measurement protocol</p><h2>What one data point means.</h2></div>
+      <p>A benchmark request is not a synthetic sleep: the Fastify endpoint performs real parameterized SQL queries sequentially and returns application and database timing evidence.</p>
+    </div>
+    <ol class="method-grid">
+      <li><span>01</span><h3>Warm the path</h3><p>Five requests per scenario/workload group are excluded before measurement.</p></li>
+      <li><span>02</span><h3>Measure serially</h3><p>One hundred requests per group run at concurrency one from the presenter client.</p></li>
+      <li><span>03</span><h3>Vary query count</h3><p>Each request performs 1, 5, 10, or 20 PostgreSQL queries sequentially.</p></li>
+      <li><span>04</span><h3>Keep the layers</h3><p>Client HTTP, server application, aggregate database, and individual SQL timings are preserved.</p></li>
+    </ol>
+  </section>
+
+  <section class="section shell interpretation">
+    <div class="result-panel good">
+      <p class="eyebrow">Supported observation</p>
+      <strong>41.905 ms</strong>
+      <h2>Hanoi HTTP p50 at one query</h2>
+      <p>Lower than Singapore's 56.656 ms in this specific client, route, workload, and run.</p>
+    </div>
+    <div class="result-panel warning">
+      <p class="eyebrow">The amplification</p>
+      <strong>719.100 ms</strong>
+      <h2>Hybrid DB p50 at twenty queries</h2>
+      <p>Compared with 36.365 ms at one query: the sequential cross-location cost dominates.</p>
+    </div>
+  </section>
+
+  <section class="section shell limits">
+    <div class="section-heading">
+      <div><p class="eyebrow">Read before quoting</p><h2>What this run cannot prove.</h2></div>
+      <p>Good benchmark reporting includes the reasons not to over-generalize.</p>
+    </div>
+    <div class="limit-list">
+      <article><span>01</span><div><h3>Not a controlled geography-only comparison</h3><p>Singapore used `t3.small`; Hanoi used `c7i.large`. Each host colocated API and PostgreSQL.</p></div></article>
+      <article><span>02</span><div><h3>Not a universal latency promise</h3><p>ISP routing, TLS behavior, client location, load, cache state, and time of day all matter.</p></div></article>
+      <article><span>03</span><div><h3>HTTP variation is not packet jitter</h3><p>The retained samples measure end-to-end request duration, not packet arrival variation.</p></div></article>
+      <article><span>04</span><div><h3>Historical is not live</h3><p>The measured infrastructure was destroyed. AWS_REAL is currently NOT_DEPLOYED with zero active project resources.</p></div></article>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .explorer-section { padding-top: 0; }
+  .method-grid { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); list-style: none; }
+  .method-grid li { min-height: 280px; padding: 30px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(12,18,32,.72); }
+  .method-grid span, .limit-list span { color: var(--cyan); font-family: var(--font-mono); font-size: .68rem; }
+  .method-grid h3 { margin: 68px 0 14px; font-family: var(--font-serif); font-size: 1.8rem; line-height: 1; }
+  .method-grid p, .result-panel p, .limit-list p { color: var(--ink-muted); }
+  .interpretation { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .result-panel { min-height: 430px; padding: clamp(28px,5vw,56px); border: 1px solid var(--line); border-top: 3px solid; background: var(--surface); }
+  .result-panel.good { border-top-color: var(--hanoi); }
+  .result-panel.warning { border-top-color: var(--hybrid); }
+  .result-panel strong { display: block; margin-top: 70px; font-family: var(--font-serif); font-size: clamp(3.7rem,8vw,7.5rem); letter-spacing: -.07em; line-height: 1; }
+  .result-panel h2 { margin: 14px 0; font-size: 1rem; }
+  .result-panel p:last-child { max-width: 50ch; }
+  .limit-list { border-top: 1px solid var(--line); }
+  .limit-list article { display: grid; grid-template-columns: 80px 1fr; min-height: 160px; align-items: start; padding: 30px 0; border-bottom: 1px solid var(--line); }
+  .limit-list h3 { margin: 0 0 8px; font-family: var(--font-serif); font-size: 1.8rem; }
+  .limit-list p { max-width: 70ch; margin: 0; }
+  @media (max-width: 900px) { .method-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 640px) { .method-grid, .interpretation { grid-template-columns: 1fr; } .limit-list article { grid-template-columns: 44px 1fr; } }
+</style>

@@ -1,0 +1,273 @@
+---
+const scenarios = [
+  {
+    key: "01",
+    name: "Singapore Regional",
+    color: "var(--singapore)",
+    api: "Singapore API",
+    db: "Singapore PostgreSQL",
+    path: "Vietnam → Singapore → Singapore",
+    lesson: "Regional baseline; API and database remain colocated."
+  },
+  {
+    key: "02",
+    name: "Hanoi Local Zone",
+    color: "var(--hanoi)",
+    api: "Hanoi API",
+    db: "Hanoi PostgreSQL",
+    path: "Vietnam → Hanoi → Hanoi",
+    lesson: "Local application and data path, with single-zone trade-offs."
+  },
+  {
+    key: "03",
+    name: "Hybrid",
+    color: "var(--hybrid)",
+    api: "Singapore API",
+    db: "Hanoi PostgreSQL",
+    path: "Vietnam → Singapore ⇄ Hanoi",
+    lesson: "Sequential private DB round trips amplify latency."
+  }
+];
+---
+
+<div class="architecture" aria-label="The three tested AWS architecture scenarios">
+  <div class="static-path">
+    <span class="node browser">Vietnam browser</span>
+    <span class="arrow" aria-hidden="true">→</span>
+    <span class="node s3">Singapore Regional S3 <small>static frontend only</small></span>
+  </div>
+
+  <p class="separation-note">
+    Static delivery path above. Runtime API paths below. S3 is not between the API and PostgreSQL.
+  </p>
+
+  <div class="scenario-stack">
+    {scenarios.map((scenario) => (
+      <article class="scenario" style={`--scenario: ${scenario.color}`}>
+        <header>
+          <span>{scenario.key}</span>
+          <div>
+            <h3>{scenario.name}</h3>
+            <p>{scenario.path}</p>
+          </div>
+        </header>
+        <div class="path">
+          <span class="node browser">Client</span>
+          <span class="route" aria-hidden="true"><i></i></span>
+          <span class="node api">{scenario.api}</span>
+          <span class:list={["route", scenario.key === "03" && "private"]} aria-hidden="true"><i></i></span>
+          <span class="node database">{scenario.db}</span>
+        </div>
+        <p class="lesson">{scenario.lesson}</p>
+      </article>
+    ))}
+  </div>
+
+  <div class="host-note">
+    <span>Physical hosts</span>
+    <strong>2 EC2 instances</strong>
+    <p>Singapore hosts Case 1 + Hybrid API. Hanoi hosts Case 2. The tiers are logical, not three machines.</p>
+  </div>
+</div>
+
+<style>
+  .architecture {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: clamp(18px, 4vw, 40px);
+    background: rgba(8, 13, 24, 0.86);
+  }
+
+  .static-path {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+  }
+
+  .arrow {
+    color: var(--ink-faint);
+  }
+
+  .node {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line-bright);
+    border-radius: 4px;
+    padding: 10px 14px;
+    background: var(--surface-strong);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 0.73rem;
+    text-align: center;
+  }
+
+  .node small {
+    display: block;
+    margin-left: 8px;
+    color: var(--ink-faint);
+    font-size: 0.62rem;
+  }
+
+  .node.s3 {
+    border-color: color-mix(in srgb, var(--orange) 60%, var(--line));
+  }
+
+  .separation-note {
+    margin: 22px 0 28px;
+    padding: 12px 0;
+    border-block: 1px dashed var(--line);
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .scenario-stack {
+    display: grid;
+    gap: 12px;
+  }
+
+  .scenario {
+    display: grid;
+    grid-template-columns: minmax(160px, 0.8fr) minmax(420px, 2fr) minmax(180px, 0.8fr);
+    gap: 24px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--scenario);
+    border-radius: 4px;
+    padding: 20px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+  }
+
+  .scenario header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .scenario header > span {
+    color: var(--scenario);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+  }
+
+  .scenario h3,
+  .scenario p {
+    margin: 0;
+  }
+
+  .scenario h3 {
+    font-size: 0.92rem;
+  }
+
+  .scenario header p {
+    margin-top: 4px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+  }
+
+  .path {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto;
+    align-items: center;
+  }
+
+  .path .node {
+    border-color: color-mix(in srgb, var(--scenario) 45%, var(--line));
+    white-space: nowrap;
+  }
+
+  .route {
+    height: 1px;
+    background: var(--scenario);
+  }
+
+  .route.private {
+    height: 3px;
+    background: repeating-linear-gradient(90deg, var(--scenario) 0 8px, transparent 8px 14px);
+  }
+
+  .lesson {
+    color: var(--ink-muted);
+    font-size: 0.78rem;
+  }
+
+  .host-note {
+    display: grid;
+    margin-top: 20px;
+    grid-template-columns: auto auto 1fr;
+    gap: 18px;
+    align-items: center;
+    padding: 16px 18px;
+    background: color-mix(in srgb, var(--cyan) 5%, transparent);
+  }
+
+  .host-note span {
+    color: var(--cyan);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+  }
+
+  .host-note strong {
+    font-size: 1rem;
+  }
+
+  .host-note p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 0.78rem;
+  }
+
+  @media (max-width: 980px) {
+    .scenario {
+      grid-template-columns: 1fr;
+    }
+
+    .lesson {
+      max-width: 58ch;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .static-path {
+      display: grid;
+      justify-items: center;
+    }
+
+    .arrow {
+      transform: rotate(90deg);
+    }
+
+    .path {
+      grid-template-columns: 1fr;
+      justify-items: stretch;
+    }
+
+    .path .node {
+      width: 100%;
+    }
+
+    .route {
+      width: 1px;
+      height: 24px;
+      margin-inline: auto;
+    }
+
+    .route.private {
+      width: 3px;
+      height: 24px;
+      background: repeating-linear-gradient(180deg, var(--scenario) 0 8px, transparent 8px 14px);
+    }
+
+    .host-note {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+  }
+</style>

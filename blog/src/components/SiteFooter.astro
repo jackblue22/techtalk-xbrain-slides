@@ -1,0 +1,107 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+
+<footer class="site-footer">
+  <div class="shell footer-grid">
+    <div>
+      <p class="eyebrow">A measured engineering story</p>
+      <h2>Placement is not the same as performance—or residency.</h2>
+    </div>
+    <div class="footer-meta">
+      <p>
+        Built from preserved historical AWS_REAL evidence and a reproducible local lab. Current AWS state:
+        <strong>NOT_DEPLOYED</strong>.
+      </p>
+      <div class="footer-links">
+        <a href={`${base}evidence/`}>Read the evidence</a>
+        <a href={`${base}run-locally/`}>Run locally</a>
+        <a href="https://github.com/jackblue22/techtalk-xbrain-slides">View source</a>
+      </div>
+    </div>
+  </div>
+  <div class="shell footer-bottom">
+    <span>Hanoi Local Zone Field Notes</span>
+    <span>Historical evidence ≠ live infrastructure</span>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: 96px;
+    padding: 72px 0 92px;
+    border-top: 1px solid var(--line);
+    background: #050810;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+    gap: clamp(48px, 10vw, 140px);
+  }
+
+  h2 {
+    max-width: 720px;
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(2.2rem, 5vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.02;
+  }
+
+  .footer-meta {
+    color: var(--ink-muted);
+  }
+
+  .footer-meta strong {
+    color: var(--green);
+  }
+
+  .footer-links {
+    display: grid;
+    margin-top: 28px;
+    border-top: 1px solid var(--line);
+  }
+
+  .footer-links a {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 0.88rem;
+    text-decoration: none;
+  }
+
+  .footer-links a:hover {
+    color: var(--cyan);
+  }
+
+  .footer-bottom {
+    display: flex;
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    justify-content: space-between;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 760px) {
+    .site-footer {
+      padding-bottom: 104px;
+    }
+
+    .footer-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .footer-bottom {
+      display: grid;
+      gap: 8px;
+    }
+  }
+</style>

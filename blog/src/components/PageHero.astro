@@ -1,0 +1,65 @@
+---
+interface Props {
+  eyebrow: string;
+  title: string;
+  lede: string;
+  marker?: string;
+}
+const { eyebrow, title, lede, marker } = Astro.props;
+---
+
+<header class="page-hero shell">
+  <div>
+    <p class="eyebrow">{eyebrow}</p>
+    <h1 class="display-title">{title}</h1>
+  </div>
+  <div class="page-lede">
+    {marker && <span>{marker}</span>}
+    <p>{lede}</p>
+  </div>
+</header>
+
+<style>
+  .page-hero {
+    display: grid;
+    min-height: 560px;
+    grid-template-columns: minmax(0, 2.3fr) minmax(280px, 0.8fr);
+    gap: clamp(48px, 9vw, 140px);
+    align-items: end;
+    padding-block: clamp(80px, 12vw, 150px) 72px;
+  }
+
+  h1 {
+    max-width: 980px;
+    font-size: clamp(4rem, 9vw, 8.5rem);
+  }
+
+  .page-lede {
+    padding-top: 22px;
+    border-top: 2px solid var(--orange);
+  }
+
+  .page-lede span {
+    color: var(--green);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+  }
+
+  .page-lede p {
+    margin: 14px 0 0;
+    color: var(--ink-muted);
+  }
+
+  @media (max-width: 760px) {
+    .page-hero {
+      min-height: auto;
+      grid-template-columns: 1fr;
+      gap: 36px;
+    }
+
+    h1 {
+      font-size: clamp(3.4rem, 15vw, 5.6rem);
+    }
+  }
+</style>

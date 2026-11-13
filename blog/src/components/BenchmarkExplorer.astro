@@ -1,0 +1,453 @@
+---
+import type { EvidenceView } from "../lib/evidence";
+
+interface Props {
+  evidence: EvidenceView;
+  compact?: boolean;
+}
+
+const { evidence, compact = false } = Astro.props;
+const scenarios = [
+  { key: "singapore", label: "Singapore", color: "#ffb14a", dash: "0" },
+  { key: "hanoi", label: "Hanoi", color: "#55d4ff", dash: "10 6" },
+  { key: "hybrid", label: "Hybrid", color: "#e994ff", dash: "2 7" }
+];
+---
+
+<section class:list={["benchmark-explorer", compact && "compact"]} data-benchmark-explorer>
+  <header class="explorer-header">
+    <div>
+      <p class="eyebrow">Historical AWS_REAL · 2026-10-29</p>
+      <h2>{compact ? "The hybrid curve tells the story." : "Explore the retained measurements."}</h2>
+    </div>
+    <div class="run-meta">
+      <span><strong>{evidence.measuredRequests.toLocaleString("en-US")}</strong> measured</span>
+      <span><strong>{evidence.excludedWarmups}</strong> warm-ups</span>
+      <span><strong>0</strong> errors</span>
+    </div>
+  </header>
+
+  <div class="explorer-controls" aria-label="Benchmark chart controls">
+    <fieldset class="metric-control">
+      <legend>Metric</legend>
+      <label><input type="radio" name={`metric-${compact}`} value="httpP50" checked /> HTTP p50</label>
+      <label><input type="radio" name={`metric-${compact}`} value="httpP95" /> HTTP p95</label>
+      <label><input type="radio" name={`metric-${compact}`} value="httpP99" /> HTTP p99</label>
+      <label><input type="radio" name={`metric-${compact}`} value="dbP50" /> DB p50</label>
+    </fieldset>
+    <fieldset class="scenario-control">
+      <legend>Scenarios</legend>
+      {scenarios.map((scenario) => (
+        <label style={`--series: ${scenario.color}`}>
+          <input type="checkbox" value={scenario.key} checked />
+          <i aria-hidden="true"></i>{scenario.label}
+        </label>
+      ))}
+    </fieldset>
+  </div>
+
+  <div class="chart-wrap">
+    <div class="chart-heading">
+      <span data-chart-label>HTTP p50 · milliseconds</span>
+      <span>Lower is better</span>
+    </div>
+    <svg class="chart" viewBox="0 0 840 430" role="img" aria-labelledby={`chart-title-${compact} chart-desc-${compact}`} data-chart>
+      <title id={`chart-title-${compact}`}>Latency by sequential SQL query count</title>
+      <desc id={`chart-desc-${compact}`}>Interactive line chart comparing Singapore, Hanoi, and Hybrid. A complete data table follows.</desc>
+      <g data-grid></g>
+      <g data-series></g>
+    </svg>
+  </div>
+
+  {!compact && (
+    <div class="table-wrap" tabindex="0" aria-label="Scrollable benchmark data table">
+      <table>
+        <caption>Raw derived percentile summary in milliseconds</caption>
+        <thead>
+          <tr>
+            <th scope="col">Scenario</th>
+            <th scope="col">Queries</th>
+            <th scope="col">HTTP p50</th>
+            <th scope="col">HTTP p95</th>
+            <th scope="col">HTTP p99</th>
+            <th scope="col">App p50</th>
+            <th scope="col">DB p50</th>
+          </tr>
+        </thead>
+        <tbody>
+          {scenarios.flatMap((scenario) =>
+            evidence.series[scenario.key as keyof typeof evidence.series].map((point) => (
+              <tr>
+                <th scope="row"><i style={`--series: ${scenario.color}`} aria-hidden="true"></i>{scenario.label}</th>
+                <td>{point.queryCount}</td>
+                <td>{point.httpP50.toFixed(3)}</td>
+                <td>{point.httpP95.toFixed(3)}</td>
+                <td>{point.httpP99.toFixed(3)}</td>
+                <td>{point.appP50.toFixed(3)}</td>
+                <td>{point.dbP50.toFixed(3)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  <p class="provenance">
+    <strong>Provenance:</strong> retained run <code>{evidence.runId}</code>. Values are derived at build time from the tracked evidence JSON. This is historical evidence, not a live AWS environment.
+  </p>
+
+  <script type="application/json" data-benchmark-data set:html={JSON.stringify({ series: evidence.series, scenarios })}></script>
+</section>
+
+<script>
+  type Point = Record<string, number> & { queryCount: number };
+  type Scenario = { key: string; label: string; color: string; dash: string };
+  type ChartPayload = { series: Record<string, Point[]>; scenarios: Scenario[] };
+
+  const labels: Record<string, string> = {
+    httpP50: "HTTP p50 · milliseconds",
+    httpP95: "HTTP p95 · milliseconds",
+    httpP99: "HTTP p99 · milliseconds",
+    dbP50: "Database p50 · milliseconds"
+  };
+
+  function renderExplorer(root: HTMLElement) {
+    const dataNode = root.querySelector<HTMLScriptElement>("[data-benchmark-data]");
+    const svg = root.querySelector<SVGSVGElement>("[data-chart]");
+    const grid = root.querySelector<SVGGElement>("[data-grid]");
+    const seriesLayer = root.querySelector<SVGGElement>("[data-series]");
+    const label = root.querySelector<HTMLElement>("[data-chart-label]");
+    if (!dataNode || !svg || !grid || !seriesLayer || !label) return;
+    const gridLayer = grid;
+    const chartSeriesLayer = seriesLayer;
+    const chartLabel = label;
+    const data = JSON.parse(dataNode.textContent || "{}") as ChartPayload;
+    const metricInputs = [...root.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    const scenarioInputs = [...root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    const ns = "http://www.w3.org/2000/svg";
+    const box = { left: 72, top: 30, right: 800, bottom: 370 };
+
+    const make = <T extends keyof SVGElementTagNameMap>(tag: T, attrs: Record<string, string>) => {
+      const el = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+      return el;
+    };
+
+    function draw() {
+      gridLayer.replaceChildren();
+      chartSeriesLayer.replaceChildren();
+      const metric = metricInputs.find((input) => input.checked)?.value ?? "httpP50";
+      const active = new Set(scenarioInputs.filter((input) => input.checked).map((input) => input.value));
+      if (active.size === 0) {
+        scenarioInputs[0].checked = true;
+        active.add(scenarioInputs[0].value);
+      }
+      chartLabel.textContent = labels[metric];
+      const values = data.scenarios
+        .filter((scenario) => active.has(scenario.key))
+        .flatMap((scenario) => data.series[scenario.key].map((point) => point[metric]));
+      const maxValue = Math.max(...values, 1);
+      const yMax = Math.ceil((maxValue * 1.12) / 50) * 50 || 10;
+
+      for (let i = 0; i <= 4; i++) {
+        const y = box.bottom - ((box.bottom - box.top) * i) / 4;
+        const value = (yMax * i) / 4;
+        gridLayer.append(make("line", { x1: String(box.left), y1: String(y), x2: String(box.right), y2: String(y), class: "grid-line" }));
+        const text = make("text", { x: String(box.left - 12), y: String(y + 4), class: "axis-label", "text-anchor": "end" });
+        text.textContent = `${Math.round(value)}`;
+        gridLayer.append(text);
+      }
+
+      [1, 5, 10, 20].forEach((count, index) => {
+        const x = box.left + ((box.right - box.left) * index) / 3;
+        const text = make("text", { x: String(x), y: String(box.bottom + 34), class: "axis-label", "text-anchor": "middle" });
+        text.textContent = String(count);
+        gridLayer.append(text);
+      });
+      const xTitle = make("text", { x: String((box.left + box.right) / 2), y: "420", class: "axis-title", "text-anchor": "middle" });
+      xTitle.textContent = "Sequential SQL queries per request";
+      gridLayer.append(xTitle);
+
+      data.scenarios.filter((scenario) => active.has(scenario.key)).forEach((scenario) => {
+        const points = data.series[scenario.key].map((point, index) => {
+          const x = box.left + ((box.right - box.left) * index) / 3;
+          const y = box.bottom - ((box.bottom - box.top) * point[metric]) / yMax;
+          return { x, y, value: point[metric], count: point.queryCount };
+        });
+        const path = make("path", {
+          d: points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" "),
+          fill: "none",
+          stroke: scenario.color,
+          "stroke-width": "4",
+          "stroke-dasharray": scenario.dash,
+          "stroke-linecap": "round",
+          "stroke-linejoin": "round"
+        });
+        chartSeriesLayer.append(path);
+        points.forEach((point) => {
+          const circle = make("circle", {
+            cx: String(point.x), cy: String(point.y), r: "7", fill: "#070b14", stroke: scenario.color, "stroke-width": "3", tabindex: "0",
+            role: "img", "aria-label": `${scenario.label}, ${point.count} queries, ${point.value.toFixed(3)} milliseconds`
+          });
+          const title = make("title", {});
+          title.textContent = `${scenario.label}: ${point.value.toFixed(3)} ms at ${point.count} queries`;
+          circle.append(title);
+          chartSeriesLayer.append(circle);
+        });
+        const end = points.at(-1);
+        if (end) {
+          const directLabel = make("text", { x: String(end.x - 6), y: String(end.y - 14), fill: scenario.color, class: "series-label", "text-anchor": "end" });
+          directLabel.textContent = scenario.label;
+          chartSeriesLayer.append(directLabel);
+        }
+      });
+    }
+
+    [...metricInputs, ...scenarioInputs].forEach((input) => input.addEventListener("change", draw));
+    draw();
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-benchmark-explorer]").forEach(renderExplorer);
+</script>
+
+<style>
+  .benchmark-explorer {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: clamp(20px, 4vw, 44px);
+    background: rgba(8, 13, 24, 0.94);
+  }
+
+  .explorer-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 32px;
+    align-items: end;
+  }
+
+  h2 {
+    max-width: 700px;
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: clamp(2.1rem, 5vw, 4.2rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  .run-meta {
+    display: flex;
+    gap: 20px;
+  }
+
+  .run-meta span {
+    display: grid;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  .run-meta strong {
+    color: var(--ink);
+    font-size: 1.35rem;
+  }
+
+  .explorer-controls {
+    display: flex;
+    margin: 36px 0 24px;
+    flex-wrap: wrap;
+    gap: 20px 32px;
+  }
+
+  fieldset {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    border: 0;
+  }
+
+  legend {
+    width: 100%;
+    margin-bottom: 6px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+  }
+
+  fieldset label {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 12px;
+    color: var(--ink-muted);
+    cursor: pointer;
+    font-size: 0.76rem;
+  }
+
+  fieldset label:hover,
+  fieldset label:has(input:checked) {
+    border-color: var(--line-bright);
+    background: var(--surface-strong);
+    color: var(--ink);
+  }
+
+  fieldset input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--cyan);
+  }
+
+  .scenario-control i,
+  tbody i {
+    display: inline-block;
+    width: 18px;
+    height: 3px;
+    background: var(--series);
+  }
+
+  .chart-wrap {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #080d18;
+  }
+
+  .chart-heading {
+    display: flex;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--line);
+    justify-content: space-between;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+  }
+
+  .chart {
+    display: block;
+    width: 100%;
+    min-width: 620px;
+    height: auto;
+  }
+
+  .chart-wrap {
+    overflow-x: auto;
+  }
+
+  :global(.grid-line) {
+    stroke: #243047;
+    stroke-width: 1;
+  }
+
+  :global(.axis-label),
+  :global(.axis-title),
+  :global(.series-label) {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  :global(.axis-label) {
+    fill: #748198;
+  }
+
+  :global(.axis-title) {
+    fill: #aab6c8;
+  }
+
+  :global(.series-label) {
+    font-weight: 500;
+  }
+
+  :global(circle:focus) {
+    outline: none;
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin-top: 24px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+  }
+
+  caption {
+    padding: 14px 16px;
+    color: var(--ink-faint);
+    text-align: left;
+  }
+
+  th,
+  td {
+    padding: 11px 16px;
+    border-top: 1px solid var(--line);
+    text-align: right;
+  }
+
+  th:first-child,
+  td:first-child {
+    text-align: left;
+  }
+
+  thead th {
+    color: var(--ink-faint);
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  tbody th {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  tbody td {
+    color: var(--ink-muted);
+  }
+
+  .provenance {
+    margin: 22px 0 0;
+    color: var(--ink-faint);
+    font-size: 0.75rem;
+  }
+
+  .provenance code {
+    word-break: break-all;
+  }
+
+  .compact .table-wrap {
+    display: none;
+  }
+
+  @media (max-width: 760px) {
+    .explorer-header {
+      grid-template-columns: 1fr;
+    }
+
+    .run-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .chart-heading span:last-child {
+      display: none;
+    }
+  }
+</style>

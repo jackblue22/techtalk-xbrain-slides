@@ -1,0 +1,107 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import PageHero from "../components/PageHero.astro";
+import ArchitectureDiagram from "../components/ArchitectureDiagram.astro";
+---
+
+<BaseLayout
+  title="Architecture — Hanoi Local Zone Field Notes"
+  description="The exact two-instance AWS topology behind the Singapore, Hanoi, and Hybrid latency experiment."
+>
+  <PageHero
+    eyebrow="Architecture · Two hosts / three paths"
+    title="The whole request path matters."
+    marker="Cost-minimal profile"
+    lede="One Singapore host and one Hanoi host expose three logical architectures without pretending each tier is a separate machine."
+  />
+
+  <section class="section shell diagram-section">
+    <ArchitectureDiagram />
+  </section>
+
+  <section class="section shell topology">
+    <div class="section-heading">
+      <div><p class="eyebrow">Physical topology</p><h2>What actually ran where.</h2></div>
+      <p>The compact profile favors a short-lived educational experiment over production availability.</p>
+    </div>
+    <div class="host-grid">
+      <article class="host singapore">
+        <header><span>SG</span><div><h3>Singapore EC2</h3><p>ap-southeast-1a · t3.small</p></div></header>
+        <ul>
+          <li><strong>:8080</strong> Singapore Fastify API</li>
+          <li><strong>:8081</strong> Hybrid Fastify API</li>
+          <li><strong>:5432</strong> PostgreSQL 16</li>
+          <li><strong>30 GiB</strong> encrypted root gp3</li>
+          <li><strong>10 GiB</strong> protected DB gp3</li>
+        </ul>
+      </article>
+      <div class="private-link" aria-label="Private VPC connectivity between Singapore and Hanoi">
+        <span>Private VPC</span><i></i><code>10.73.0.0/16</code>
+      </div>
+      <article class="host hanoi">
+        <header><span>HN</span><div><h3>Hanoi EC2</h3><p>ap-southeast-1-han-1a · c7i.large</p></div></header>
+        <ul>
+          <li><strong>:8080</strong> Hanoi Fastify API</li>
+          <li><strong>:5432</strong> PostgreSQL 16</li>
+          <li><strong>30 GiB</strong> encrypted root gp3</li>
+          <li><strong>10 GiB</strong> protected DB gp3</li>
+          <li><strong>Dependency</strong> initializes Hybrid secret first</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="section shell boundary-grid">
+    <article>
+      <p class="eyebrow">Network boundary</p>
+      <h2>Public API, private database.</h2>
+      <p>Direct HTTP APIs use Elastic IPs and only the reviewed presenter `/32`. PostgreSQL port 5432 remains private through the shared security-group relationship.</p>
+    </article>
+    <article>
+      <p class="eyebrow">Service boundary</p>
+      <h2>S3 remains Regional.</h2>
+      <p>The frontend and artifact buckets live in the Singapore parent Region. S3 delivers static files and bootstrap artifacts; it is not in the API-to-database request path.</p>
+    </article>
+    <article>
+      <p class="eyebrow">Residency boundary</p>
+      <h2>Placement is not proof.</h2>
+      <p>Hanoi EC2 and EBS placement says nothing by itself about snapshots, Regional services, control-plane data, logs, package sources, or operator systems.</p>
+    </article>
+  </section>
+
+  <section class="section reading-shell caveat">
+    <p class="eyebrow">Architecture honesty</p>
+    <h2>This is not a production reference architecture.</h2>
+    <p>
+      It is a deliberately small measurement rig. Each placement is single-zone, API and PostgreSQL contend on the same host, and Singapore/Hanoi use different instance types. Those choices keep the lab understandable and affordable, but they limit what the comparison can claim.
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .diagram-section { padding-top: 0; }
+  .host-grid { display: grid; grid-template-columns: 1fr minmax(130px, .35fr) 1fr; gap: 20px; align-items: center; }
+  .host { border: 1px solid var(--line); border-top: 3px solid; border-radius: 4px; padding: clamp(24px, 4vw, 40px); background: var(--surface); }
+  .host.singapore { border-top-color: var(--singapore); }
+  .host.hanoi { border-top-color: var(--hanoi); }
+  .host header { display: flex; gap: 16px; align-items: flex-start; }
+  .host header > span { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid var(--line-bright); font-family: var(--font-mono); font-size: .72rem; }
+  .host h3, .host header p { margin: 0; }
+  .host h3 { font-family: var(--font-serif); font-size: 2rem; line-height: 1; }
+  .host header p { margin-top: 7px; color: var(--ink-faint); font-family: var(--font-mono); font-size: .66rem; }
+  .host ul { margin: 32px 0 0; padding: 0; list-style: none; }
+  .host li { display: flex; min-height: 48px; align-items: center; border-top: 1px solid var(--line); color: var(--ink-muted); font-size: .82rem; }
+  .host li strong { min-width: 92px; color: var(--ink); font-family: var(--font-mono); font-size: .72rem; }
+  .private-link { display: grid; justify-items: center; color: var(--ink-faint); font-family: var(--font-mono); font-size: .62rem; text-align: center; text-transform: uppercase; }
+  .private-link i { width: 100%; height: 3px; margin: 12px 0; background: repeating-linear-gradient(90deg, var(--hybrid) 0 8px, transparent 8px 14px); }
+  .private-link code { color: var(--hybrid); }
+  .boundary-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .boundary-grid article { min-height: 360px; padding: 40px; border: 1px solid var(--line); border-right: 0; background: rgba(12,18,32,.72); }
+  .boundary-grid article:last-child { border-right: 1px solid var(--line); }
+  .boundary-grid h2 { margin: 60px 0 20px; font-family: var(--font-serif); font-size: clamp(2rem, 3vw, 3.2rem); line-height: 1.02; letter-spacing: -.04em; }
+  .boundary-grid article > p:last-child, .caveat p:last-child { color: var(--ink-muted); }
+  .caveat { text-align: center; }
+  .caveat h2 { margin: 0; font-family: var(--font-serif); font-size: clamp(2.7rem, 6vw, 5rem); line-height: 1; letter-spacing: -.04em; }
+  .caveat p:last-child { max-width: 66ch; margin: 28px auto 0; }
+  @media (max-width: 900px) { .host-grid { grid-template-columns: 1fr; } .private-link i { width: 3px; height: 48px; background: repeating-linear-gradient(180deg,var(--hybrid) 0 8px,transparent 8px 14px); } .boundary-grid { grid-template-columns: 1fr; } .boundary-grid article { border-right: 1px solid var(--line); border-bottom: 0; } .boundary-grid article:last-child { border-bottom: 1px solid var(--line); } }
+</style>
